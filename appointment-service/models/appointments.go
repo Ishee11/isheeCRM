@@ -34,11 +34,15 @@ func (i *IntString) UnmarshalJSON(data []byte) error {
 
 // Appointment - структура для записи на прием
 type Appointment struct {
-	ID                int       `json:"id"`
-	ServiceID         IntString `json:"service_id"`         // Используем указатель для возможности проверки, передано ли значение
-	ClientID          IntString `json:"client_id"`          // Используем указатель
-	StartTime         time.Time `json:"start_time"`         // Используем указатель для времени
-	Price             IntString `json:"price"`              // Используем указатель для цены
-	PaymentStatus     string    `json:"payment_status"`     // Используем указатель для статуса оплаты
-	AppointmentStatus string    `json:"appointment_status"` // Используем указатель для статуса записи
+	ID                int        `json:"id"`
+	Cost              int        `json:"cost"`
+	ServiceID         IntString  `json:"service_id"`         // Используем указатель для возможности проверки, передано ли значение
+	ClientID          IntString  `json:"client_id"`          // Используем указатель
+	StartTime         *time.Time `json:"start_time"`         // Используем указатель для времени
+	Price             IntString  `json:"price"`              // Используем указатель для цены
+	PaymentStatus     *string    `json:"payment_status"`     // Используем указатель для статуса оплаты
+	AppointmentStatus *string    `json:"appointment_status"` // Используем указатель для статуса записи
+	Amount            IntString  `json:"amount"`             // Сумма оплаты
+	ServiceName       string     `json:"service_name"`
+	ClientName        string     `json:"client_name"`
 }

@@ -28,7 +28,7 @@ import (
 // ЗАПИСЬ -------------------------------------------------------------------------------------------------------------
 
 // Создать запись
-func CreateAppointment(c *gin.Context) {
+func CreateVisit(c *gin.Context) {
 	var appointment models.Appointment
 
 	// Попытка привязки данных JSON к структуре
@@ -95,7 +95,7 @@ func CreateAppointment(c *gin.Context) {
 }
 
 // Получить список записей (если передан интервал - ищем записи в нем, если нет - только будующие записи)
-func GetAppointments(c *gin.Context) {
+func GetVisits(c *gin.Context) {
 	// Получаем параметры интервала (если они есть)
 	startParam := c.DefaultQuery("start", "") // Параметр start, по умолчанию пустая строка
 	endParam := c.DefaultQuery("end", "")     // Параметр end, по умолчанию пустая строка
@@ -279,7 +279,7 @@ func GetAppointments(c *gin.Context) {
 }*/
 
 // Перенести запись
-func MoveAppointment(c *gin.Context) {
+func MoveVisit(c *gin.Context) {
 	// Читаем ID записи из URL
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -321,7 +321,7 @@ func MoveAppointment(c *gin.Context) {
 }
 
 // Удалить запись по ID
-func DeleteAppointment(c *gin.Context) {
+func DeleteVisit(c *gin.Context) {
 	// Читаем ID записи из URL
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -343,7 +343,7 @@ func DeleteAppointment(c *gin.Context) {
 }
 
 // Обновить статус записи
-func UpdateAppointmentStatus(c *gin.Context) {
+func UpdateVisitStatus(c *gin.Context) {
 	// Читаем ID записи из URL
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -425,7 +425,16 @@ func UpdatePaymentStatusMain(c *gin.Context) {
 
 	// Если статус оплаты изменяется на "paid", добавляем финансовую операцию
 	if *appointment.PaymentStatus == "paid" {
-		err = UpdatePaymentAmount(tx, id, appointment.ClientID)
+		err = UpdatePaymentAmount(tx, id, appointment.ClientID, 0)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка добавления финансовой операции", "details": err.Error()})
+			return
+		}
+	}
+
+	// Если статус оплаты изменяется на "partially_paid", добавляем финансовую операцию
+	if *appointment.PaymentStatus == "partially_paid" {
+		err = UpdatePaymentAmount(tx, id, appointment.ClientID, appointment.Amount)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка добавления финансовой операции", "details": err.Error()})
 			return
@@ -437,20 +446,22 @@ func UpdatePaymentStatusMain(c *gin.Context) {
 }
 
 // Обновить сумму платежа и создать финансовую операцию
-func UpdatePaymentAmount(tx pgx.Tx, appointmentID int, clientID models.IntString) error {
+func UpdatePaymentAmount(tx pgx.Tx, appointmentID int, clientID models.IntString, amount int) error {
 	// Преобразуем clientID в int
 	clientIDInt := IntStringToInt(clientID)
 
-	// Сначала извлекаем стоимость записи (cost) из таблицы appointments
-	var cost float64
-	query := `
+	if amount == 0 {
+		// Сначала извлекаем стоимость записи (cost) из таблицы appointments
+		//var cost float64
+		query := `
 		SELECT cost
 		FROM appointments
 		WHERE id = $1
 	`
-	err := tx.QueryRow(context.Background(), query, appointmentID).Scan(&cost)
-	if err != nil {
-		return fmt.Errorf("не удалось получить стоимость записи: %w", err)
+		err := tx.QueryRow(context.Background(), query, appointmentID).Scan(&amount)
+		if err != nil {
+			return fmt.Errorf("не удалось получить стоимость записи: %w", err)
+		}
 	}
 
 	// Теперь создаём финансовую операцию с этой суммой
@@ -463,12 +474,12 @@ func UpdatePaymentAmount(tx pgx.Tx, appointmentID int, clientID models.IntString
 	documentNumber := fmt.Sprintf("PAY-%d-%d", appointmentID, time.Now().Unix())
 	purpose := "Оплата за услугу"
 	cashbox := "Основная касса"
-	amount := cost
+	//amount := cost
 	cashboxBalance := amount      // Пример расчёта остатка кассы
 	serviceOrProduct := "service" // Для оплаты услуги
 
 	// Выполнение запроса
-	_, err = tx.Exec(
+	_, err := tx.Exec(
 		context.Background(),
 		paymentQuery,
 		documentNumber,

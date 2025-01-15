@@ -1,0 +1,40 @@
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: postgres-container
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 87363699
+      POSTGRES_DB: isheecrm
+    volumes:
+      - isheecrm_data:/var/lib/postgresql/data  # Используем том isheecrm_data
+    networks:
+      - app-network
+    ports:
+      - "5432:5432"
+
+  app:
+    build:
+      context: .  # Указываем директорию с вашим Dockerfile
+    container_name: isheecrm-container
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: 87363699
+      DB_NAME: isheecrm
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    depends_on:
+      - postgres
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  isheecrm_data:  # Создаем том isheecrm_data
+    driver: local

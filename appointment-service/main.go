@@ -20,13 +20,13 @@ func main() {
 
 	// Настраиваем обработчик для добавления активности
 	// ЗАПИСИ
-	appointmentsGroup := router.Group("/appointments")
+	visitsGroup := router.Group("/visits")
 	{
-		appointmentsGroup.POST("/", handlers.CreateAppointment)                // создание записи
-		appointmentsGroup.GET("/", handlers.GetAppointments)                   // получение списка записей с фильтрами
-		appointmentsGroup.PUT("/status/:id", handlers.UpdateAppointmentStatus) // обновление статуса записи
-		appointmentsGroup.PUT("/move/:id", handlers.MoveAppointment)           // перенос записи
-		appointmentsGroup.DELETE("/:id", handlers.DeleteAppointment)           // удаление записи
+		visitsGroup.POST("/", handlers.CreateVisit)                // создание записи
+		visitsGroup.GET("/", handlers.GetVisits)                   // получение списка записей с фильтрами
+		visitsGroup.PUT("/status/:id", handlers.UpdateVisitStatus) // обновление статуса записи
+		visitsGroup.PUT("/move/:id", handlers.MoveVisit)           // перенос записи
+		visitsGroup.DELETE("/:id", handlers.DeleteVisit)           // удаление записи
 	}
 
 	// КЛИЕНТЫ
@@ -49,8 +49,8 @@ func main() {
 	// ОПЛАТА
 	paymentsGroup := router.Group("/payments")
 	{
-		paymentsGroup.POST("/subscription", handlers.AddVisitTransaction)       // оплата абонементом
-		paymentsGroup.PUT("/appointment/:id", handlers.UpdatePaymentStatusMain) // обновление статуса оплаты для записи
+		paymentsGroup.POST("/subscription", handlers.AddVisitTransaction)  // оплата абонементом
+		paymentsGroup.PUT("/visits/:id", handlers.UpdatePaymentStatusMain) // обновление статуса оплаты для записи
 	}
 
 	// СТАТИСТИКА

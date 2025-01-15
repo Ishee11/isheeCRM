@@ -42,7 +42,7 @@ type Appointment struct {
 	Price             IntString  `json:"price"`              // Используем указатель для цены
 	PaymentStatus     *string    `json:"payment_status"`     // Используем указатель для статуса оплаты
 	AppointmentStatus *string    `json:"appointment_status"` // Используем указатель для статуса записи
-	Amount            IntString  `json:"amount"`             // Сумма оплаты
+	Amount            int        `json:"amount"`             // Сумма оплаты
 	ServiceName       string     `json:"service_name"`
 	ClientName        string     `json:"client_name"`
 }

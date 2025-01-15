@@ -8,5 +8,12 @@
       <jdbc-url>jdbc:postgresql://localhost:5432/isheecrm</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
+    <data-source source="LOCAL" name="isheecrm@host.docker.internal" uuid="1b23002d-6647-4cb5-a5ff-d14c005668e1">
+      <driver-ref>postgresql</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
+      <jdbc-url>jdbc:postgresql://host.docker.internal:5432/isheecrm</jdbc-url>
+      <working-dir>$ProjectFileDir$</working-dir>
+    </data-source>
   </component>
 </project>

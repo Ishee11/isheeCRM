@@ -14,7 +14,7 @@ services:
       - "5432:5432"
 
   app:
-    image: appointment-service-app
+    image: ishee/appointment-service-app
     container_name: appointment-service-app-container
     environment:
       DB_HOST: postgres

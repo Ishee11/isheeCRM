@@ -1,27 +1,21 @@
 services:
   postgres:
-    image: postgres:17
+    image: postgres
     container_name: postgres-container
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 87363699
       POSTGRES_DB: isheecrm
     volumes:
-      - isheecrm_data:/var/lib/postgresql/data  # Используем том isheecrm_data
+      - isheecrm_data:/var/lib/postgresql/data
     networks:
       - app-network
     ports:
       - "5432:5432"
-    deploy:
-      resources:
-        limits:
-          memory: 256m
-          cpus: "0.5"  # Ограничиваем до 50% CPU
 
   app:
-    build:
-      context: .  # Указываем директорию с вашим Dockerfile
-    container_name: isheecrm-container
+    image: appointment-service-app
+    container_name: appointment-service-app-container
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -34,16 +28,10 @@ services:
       - app-network
     depends_on:
       - postgres
-    deploy:
-      resources:
-        limits:
-          memory: 192m  # Ограничиваем использование памяти для приложения
-          cpus: "0.4"  # Ограничиваем до 40% CPU
 
 networks:
   app-network:
     driver: bridge
 
 volumes:
-  isheecrm_data:  # Создаем том isheecrm_data
-    driver: local
+  isheecrm_data:

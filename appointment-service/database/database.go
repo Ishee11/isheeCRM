@@ -12,8 +12,8 @@ import (
 
 // Параметры подключения
 var (
-	//host = "localhost" // "host.docker.internal" // "db"
-	host     = getEnv("DB_HOST", "postgres")
+	//host = "localhost" // "host.docker.internal" // "db" postgres
+	host     = getEnv("DB_HOST", "localhost")
 	port     = getEnvAsInt("DB_PORT", 5432)
 	user     = getEnv("DB_USER", "postgres")
 	password = getEnv("DB_PASSWORD", "87363699")

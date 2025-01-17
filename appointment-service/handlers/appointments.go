@@ -595,21 +595,21 @@ func UpdatePaymentStatusMain(c *gin.Context) {
 	}
 
 	// Открываем транзакцию
-	tx, err := database.Pool.Begin(context.Background())
+	tx, err := database.Pool.BeginTx(context.Background(), pgx.TxOptions{}) // Передаем правильные параметры
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка начала транзакции", "details": err.Error()})
 		return
 	}
 	defer func() {
 		if p := recover(); p != nil || err != nil {
-			_ = tx.Rollback(context.Background())
+			_ = tx.Rollback(context.Background()) // Передаем контекст в Rollback
 		} else {
-			_ = tx.Commit(context.Background())
+			_ = tx.Commit(context.Background()) // Передаем контекст в Commit
 		}
 	}()
 
 	// Обновляем статус оплаты
-	err = UpdatePaymentStatus(tx, id, *appointment.PaymentStatus)
+	err = UpdatePaymentStatus(tx, id, *appointment.PaymentStatus) // Передаем транзакцию в функцию
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка обновления статуса", "details": err.Error()})
 		return
@@ -617,7 +617,7 @@ func UpdatePaymentStatusMain(c *gin.Context) {
 
 	// Если статус оплаты изменяется на "paid", добавляем финансовую операцию
 	if *appointment.PaymentStatus == "paid" {
-		err = UpdatePaymentAmount(tx, id, appointment.ClientID, 0)
+		err = UpdatePaymentAmount(tx, id, appointment.ClientID, 0) // Передаем транзакцию
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка добавления финансовой операции", "details": err.Error()})
 			return
@@ -626,7 +626,7 @@ func UpdatePaymentStatusMain(c *gin.Context) {
 
 	// Если статус оплаты изменяется на "partially_paid", добавляем финансовую операцию
 	if *appointment.PaymentStatus == "partially_paid" {
-		err = UpdatePaymentAmount(tx, id, appointment.ClientID, appointment.Amount)
+		err = UpdatePaymentAmount(tx, id, appointment.ClientID, appointment.Amount) // Передаем транзакцию
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка добавления финансовой операции", "details": err.Error()})
 			return
@@ -644,7 +644,6 @@ func UpdatePaymentAmount(tx pgx.Tx, appointmentID int, clientID models.IntString
 
 	if amount == 0 {
 		// Сначала извлекаем стоимость записи (cost) из таблицы appointments
-		//var cost float64
 		query := `
 		SELECT cost
 		FROM appointments
@@ -659,18 +658,17 @@ func UpdatePaymentAmount(tx pgx.Tx, appointmentID int, clientID models.IntString
 	// Теперь создаём финансовую операцию с этой суммой
 	paymentQuery := `
 		INSERT INTO financial_operations (
-			document_number, client_id, purpose, cashbox, amount, cashbox_balance, service_or_product
+			document_number, client_id, purpose, cashbox, amount, cashbox_balance, service_or_product, appointment_id
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	documentNumber := fmt.Sprintf("PAY-%d-%d", appointmentID, time.Now().Unix())
 	purpose := "Оплата за услугу"
 	cashbox := "Основная касса"
-	//amount := cost
 	cashboxBalance := amount      // Пример расчёта остатка кассы
 	serviceOrProduct := "service" // Для оплаты услуги
 
-	// Выполнение запроса
+	// Выполнение запроса с добавлением appointment_id
 	_, err := tx.Exec(
 		context.Background(),
 		paymentQuery,
@@ -681,6 +679,7 @@ func UpdatePaymentAmount(tx pgx.Tx, appointmentID int, clientID models.IntString
 		amount,
 		cashboxBalance,
 		serviceOrProduct,
+		appointmentID, // Добавляем связку с appointment_id
 	)
 	if err != nil {
 		return fmt.Errorf("не удалось добавить финансовую операцию: %w", err)
@@ -689,7 +688,7 @@ func UpdatePaymentAmount(tx pgx.Tx, appointmentID int, clientID models.IntString
 }
 
 // Обновить статус оплаты
-func UpdatePaymentStatus(tx pgx.Tx, appointmentID int, paymentStatus string) error {
+/*func UpdatePaymentStatus(tx pgx.Tx, appointmentID int, paymentStatus string) error {
 	// Запрос для обновления статуса оплаты
 	query := `
 		UPDATE appointments
@@ -707,6 +706,33 @@ func UpdatePaymentStatus(tx pgx.Tx, appointmentID int, paymentStatus string) err
 	if err != nil {
 		return fmt.Errorf("не удалось обновить статус оплаты: %w", err)
 	}
+	return nil
+}*/
+
+// UpdatePaymentStatus обновляет статус оплаты и удаляет финансовую операцию, если статус оплаты "не оплачено"
+func UpdatePaymentStatus(tx pgx.Tx, appointmentID int, newStatus string) error {
+	// Обновляем статус оплаты в таблице appointments
+	_, err := tx.Exec(context.Background(), `
+		UPDATE appointments
+		SET payment_status = $1
+		WHERE id = $2`, newStatus, appointmentID)
+	if err != nil {
+		return err
+	}
+
+	// Если статус "не оплачено", ищем и удаляем связанную финансовую операцию
+	if newStatus == "unpaid" {
+		// Удаляем финансовую операцию, если она существует
+		_, err = tx.Exec(context.Background(), `
+			DELETE FROM financial_operations
+			WHERE appointment_id = $1`, appointmentID)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Нет необходимости явно делать tx.Commit, так как это сделает вызывающая функция
+	// Если ошибка была, транзакция откатится, если нет — она будет зафиксирована в вызывающей функции
 	return nil
 }
 

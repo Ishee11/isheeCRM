@@ -17,4 +17,4 @@ services:
 
 networks:
   appointment-service_app-network:
-    driver: bridge
+    external: true

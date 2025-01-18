@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: 87363699
       POSTGRES_DB: isheecrm
     volumes:
-      - isheecrm_data:/var/lib/postgresql/data
+      - isheecrm_isheecrm_data:/var/lib/postgresql/data
     networks:
       - appointment-service_app-network
     ports:
@@ -34,4 +34,5 @@ networks:
     driver: bridge
 
 volumes:
-  isheecrm_data:
+  isheecrm_isheecrm_data:
+    external: true   # Указываем, что том является внешним

@@ -1267,8 +1267,19 @@ func GetStatistics(startDate, endDate time.Time) (models.Statistics, error) {
 	endDateStr := endDate.Format("2006-01-02")
 
 	query := `
+		WITH all_visits AS (
+			SELECT operation_date::date AS visit_date
+			FROM financial_operations
+			WHERE operation_date::date BETWEEN $1::date AND $2::date
+		
+			UNION ALL
+		
+			SELECT visit_date
+			FROM subscription_visits
+			WHERE visit_date BETWEEN $1::date AND $2::date
+		)
 		SELECT
-			COUNT(*) AS total_visits,
+			(SELECT COUNT(*) FROM all_visits) AS total_visits, -- Теперь считаем все посещения из объединенной выборки
 			COALESCE(SUM(fo.amount), 0) AS total_earnings,
 			COALESCE(SUM(CASE WHEN fo.service_or_product = 'service' THEN fo.amount ELSE 0 END), 0) AS total_services,
 			COALESCE(SUM(CASE WHEN fo.service_or_product = 'subscription' THEN fo.amount ELSE 0 END), 0) AS total_subscriptions
@@ -1277,11 +1288,11 @@ func GetStatistics(startDate, endDate time.Time) (models.Statistics, error) {
 		WHERE
 			fo.operation_date::date BETWEEN $1::date AND $2::date;
 	`
-
 	// Используем указатели для обработки возможных NULL
 	var totalVisits int
 	var totalEarnings, totalServices, totalSubscriptions *float64
 
+	// Выполняем запрос
 	err := database.Pool.QueryRow(context.Background(), query, startDateStr, endDateStr).Scan(
 		&totalVisits,
 		&totalEarnings,
@@ -1299,7 +1310,7 @@ func GetStatistics(startDate, endDate time.Time) (models.Statistics, error) {
 		TotalServices:      coalesceFloat64(totalServices),
 		TotalSubscriptions: coalesceFloat64(totalSubscriptions),
 	}
-
+	fmt.Println(stats)
 	return stats, nil
 }
 

@@ -42,6 +42,7 @@ func main() {
 	{
 		subscriptionsGroup.POST("/search", handlers.GetActiveSubscriptionHandler) // найти абонемент с положительным балансом
 		subscriptionsGroup.POST("/sell", handlers.SellSubscription)               // продажа абонемента
+		subscriptionsGroup.POST("/add", handlers.AddSubscriptionType)             // добавить тип абонемента
 		subscriptionsGroup.GET("/types", handlers.GetSubscriptionTypes)           // получить список типов абонементов
 		subscriptionsGroup.GET("/client", handlers.GetSubscriptionsHandler)       // получение списка абонементов клиента
 	}

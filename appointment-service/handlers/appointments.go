@@ -95,6 +95,7 @@ func CreateVisit(c *gin.Context) {
 	c.JSON(http.StatusCreated, appointment)
 }
 
+// Получить список записей
 func GetVisits(c *gin.Context) {
 	startParam := c.DefaultQuery("start", "")
 	onlyUnpaid := c.DefaultQuery("unpaid", "")
@@ -177,6 +178,191 @@ func GetVisits(c *gin.Context) {
 
 	c.JSON(http.StatusOK, result)
 }
+
+// ... с использованием упорядоченных мап
+/*func GetVisits(c *gin.Context) {
+	startParam := c.DefaultQuery("start", "")
+	onlyUnpaid := c.DefaultQuery("unpaid", "")
+
+	var startTime *time.Time
+	var err error
+
+	// Обработка параметра start
+	if startParam != "" {
+		parsedStart, err := time.Parse("2006-01-02", startParam)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный формат параметра start"})
+			return
+		}
+		_ = &parsedStart
+	}
+
+	// Формируем SQL-запрос
+	query := `
+		SELECT id, service_id, client_id, start_time, payment_status
+		FROM appointments
+		WHERE 1 = 1
+		ORDER BY start_time ASC
+`
+
+	params := []interface{}{}
+
+	if onlyUnpaid == "true" {
+		query += " AND payment_status = 'unpaid'"
+	}
+	if startTime != nil {
+		query += " AND start_time >= $1"
+		params = append(params, *startTime)
+	}
+
+	// Выполняем запрос
+	rows, err := database.Pool.Query(context.Background(), query, params...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось получить записи"})
+		return
+	}
+	defer rows.Close()
+
+	// Используем orderedmap для упорядоченных ключей
+	result := orderedmap.New()
+
+	for rows.Next() {
+		var appointment models.Appointment
+		if err := rows.Scan(&appointment.ID, &appointment.ServiceID, &appointment.ClientID, &appointment.StartTime, &appointment.PaymentStatus); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка чтения данных"})
+			return
+		}
+
+		var serviceName string
+		serviceQuery := `SELECT name FROM services WHERE service_id = $1`
+		err = database.Pool.QueryRow(context.Background(), serviceQuery, appointment.ServiceID).Scan(&serviceName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения названия услуги"})
+			return
+		}
+
+		var clientName string
+		clientQuery := `SELECT name FROM clients WHERE clients_id = $1`
+		err = database.Pool.QueryRow(context.Background(), clientQuery, appointment.ClientID).Scan(&clientName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения имени клиента"})
+			return
+		}
+
+		appointment.ServiceName = serviceName
+		appointment.ClientName = clientName
+
+		key := fmt.Sprintf("%v в %v %v %v",
+			appointment.StartTime.Format("02.01.2006"),
+			appointment.StartTime.Format("15:04"),
+			appointment.ServiceName,
+			appointment.ClientName,
+		)
+
+		// Добавляем запись в orderedmap
+		result.Set(key, appointment)
+	}
+
+	// Возвращаем результат в JSON
+	c.JSON(http.StatusOK, result)
+	fmt.Println(result)
+}*/
+
+// еще вариант
+/*func GetVisits(c *gin.Context) {
+	startParam := c.DefaultQuery("start", "")
+	onlyUnpaid := c.DefaultQuery("unpaid", "")
+
+	var startTime *time.Time
+	var err error
+
+	// Обработка параметра start
+	if startParam != "" {
+		parsedStart, err := time.Parse("2006-01-02", startParam)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный формат параметра start"})
+			return
+		}
+		startTime = &parsedStart
+	}
+
+	// Формируем SQL-запрос
+	query := `
+        SELECT id, service_id, client_id, start_time, payment_status
+        FROM appointments
+        WHERE 1 = 1
+    `
+	params := []interface{}{}
+
+	if onlyUnpaid == "true" {
+		query += " AND payment_status = 'unpaid'"
+	}
+	if startTime != nil {
+		query += " AND start_time >= $1"
+		params = append(params, *startTime)
+	}
+	query += " ORDER BY start_time ASC"
+
+	// Выполняем запрос
+	rows, err := database.Pool.Query(context.Background(), query, params...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось получить записи"})
+		return
+	}
+	defer rows.Close()
+
+	// Создаём список результатов
+	result := []map[string]interface{}{}
+
+	for rows.Next() {
+		var appointment models.Appointment
+		if err := rows.Scan(&appointment.ID, &appointment.ServiceID, &appointment.ClientID, &appointment.StartTime, &appointment.PaymentStatus); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка чтения данных"})
+			return
+		}
+
+		var serviceName string
+		serviceQuery := `SELECT name FROM services WHERE service_id = $1`
+		err = database.Pool.QueryRow(context.Background(), serviceQuery, appointment.ServiceID).Scan(&serviceName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения названия услуги"})
+			return
+		}
+
+		var clientName string
+		clientQuery := `SELECT name FROM clients WHERE clients_id = $1`
+		err = database.Pool.QueryRow(context.Background(), clientQuery, appointment.ClientID).Scan(&clientName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения имени клиента"})
+			return
+		}
+
+		// Генерируем ключ
+		key := fmt.Sprintf("%v в %v %v %v",
+			appointment.StartTime.Format("02.01.2006"),
+			appointment.StartTime.Format("15:04"),
+			serviceName,
+			clientName,
+		)
+
+		// Добавляем в список
+		entry := map[string]interface{}{
+			"key":            key,
+			"id":             appointment.ID,
+			"service_id":     appointment.ServiceID,
+			"client_id":      appointment.ClientID,
+			"start_time":     appointment.StartTime,
+			"payment_status": appointment.PaymentStatus,
+			"service_name":   serviceName,
+			"client_name":    clientName,
+		}
+
+		result = append(result, entry)
+	}
+
+	// Возвращаем результат в формате JSON
+	c.JSON(http.StatusOK, result)
+}*/
 
 // Перенести запись
 func MoveVisit(c *gin.Context) {
@@ -436,6 +622,36 @@ func UpdatePaymentStatus(tx pgx.Tx, appointmentID int, newStatus string) error {
 			WHERE appointment_id = $1`, appointmentID)
 		if err != nil {
 			return err
+		}
+
+		// Проверяем, есть ли посещение по абонементу
+		var subscriptionID int
+		err = tx.QueryRow(context.Background(), `
+			SELECT subscription_id
+			FROM subscription_visits
+			WHERE appointment_id = $1`, appointmentID).Scan(&subscriptionID)
+
+		if err != nil && err != pgx.ErrNoRows {
+			return err
+		}
+
+		if err == nil {
+			// Удаляем посещение
+			_, err = tx.Exec(context.Background(), `
+				DELETE FROM subscription_visits
+				WHERE appointment_id = $1`, appointmentID)
+			if err != nil {
+				return err
+			}
+
+			// Восстанавливаем баланс
+			_, err = tx.Exec(context.Background(), `
+				UPDATE subscriptions
+				SET current_balance = current_balance + 1
+				WHERE subscriptions.subscriptions_id = $1`, subscriptionID)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1022,6 +1238,26 @@ func GetStatistics(startDate, endDate time.Time) (models.Statistics, error) {
 	return stats, nil
 }
 
+// Получение статистики за текущий месяц (с 1-го числа до сегодняшнего дня)
+func GetCurrentMonthStatisticsHandler(c *gin.Context) {
+	// Текущее время
+	now := time.Now()
+	// Определяем начало месяца: 1-е число текущего месяца
+	startDate := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	// Конечная дата – сегодняшняя дата
+	endDate := now
+
+	// Получаем статистику за вычисленный период
+	stats, err := GetStatistics(startDate, endDate)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения статистики", "details": err.Error()})
+		return
+	}
+
+	// Отправляем ответ с данными статистики
+	c.JSON(http.StatusOK, stats)
+}
+
 // АДМИНИСТРИРОВАНИЕ --------------------------------------------------------------------------------------------------
 
 // Абонементы
@@ -1053,10 +1289,88 @@ func AddSubscriptionType(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при добавлении абонемента", "details": err.Error()})
 	} else {
-		fmt.Println(query)
 		// Успешный ответ
 		c.JSON(http.StatusOK, req)
 	}
+}
+
+// Услуги
+// Добавить услугу
+// аргументы: name, duration, price
+func AddService(c *gin.Context) {
+	var req models.Service
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
+
+	query := `
+		INSERT INTO services (name, duration, price)
+		VALUES ($1, $2, $3)
+	`
+
+	// Выполняем запрос
+	_, err := database.Pool.Exec(context.Background(), query, req.Name, req.Duration, req.Price)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при добавлении услуги", "details": err.Error()})
+	} else {
+		// Успешный ответ
+		c.JSON(http.StatusOK, req)
+	}
+
+}
+
+// Получить список услуг
+func GetServices(c *gin.Context) {
+	query := `
+		SELECT service_id, name, duration, price
+		FROM services
+	`
+
+	rows, err := database.Pool.Query(context.Background(), query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось получить список услуг", "details": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	// Используем map для формирования результата
+	servicesMap := make(map[string]models.Service)
+
+	for rows.Next() {
+		var service models.Service
+		if err := rows.Scan(&service.ID, &service.Name, &service.Duration, &service.Price); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка чтения данных", "details": err.Error()})
+			return
+		}
+		// Добавляем запись в map
+		key := fmt.Sprintf("%v - %v мин. %v руб.", service.Name, service.Duration, service.Price)
+		servicesMap[key] = service
+	}
+	fmt.Println(servicesMap)
+	c.JSON(http.StatusOK, servicesMap)
+}
+
+// Удалить услугу по ID
+func DeleteService(c *gin.Context) {
+	// Читаем ID записи из URL
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный ID"})
+		return
+	}
+
+	// Выполняем запрос на удаление записи
+	query := `DELETE FROM services WHERE service_id = $1`
+
+	_, err = database.Pool.Exec(context.Background(), query, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось удалить запись"})
+		return
+	}
+
+	// Возвращаем успешный ответ
+	c.JSON(http.StatusOK, gin.H{"message": "Услуга успешно удалена"})
 }
 
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ --------------------------------------------------------------------------------------------

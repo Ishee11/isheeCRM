@@ -47,6 +47,14 @@ func main() {
 		subscriptionsGroup.GET("/client", handlers.GetSubscriptionsHandler)       // получение списка абонементов клиента
 	}
 
+	// УСЛУГИ
+	serviceGroup := router.Group("/services")
+	{
+		serviceGroup.POST("/add", handlers.AddService)      // добавить услугу
+		serviceGroup.GET("/", handlers.GetServices)         // список услуг
+		serviceGroup.DELETE("/:id", handlers.DeleteService) // удалить услугу
+	}
+
 	// ОПЛАТА
 	paymentsGroup := router.Group("/payments")
 	{
@@ -57,7 +65,8 @@ func main() {
 	// СТАТИСТИКА
 	statisticsGroup := router.Group("/statistics")
 	{
-		statisticsGroup.POST("/", handlers.GetStatisticsHandler) // статистика
+		statisticsGroup.POST("/", handlers.GetStatisticsHandler)                         // статистика
+		statisticsGroup.GET("/current-month", handlers.GetCurrentMonthStatisticsHandler) // за этот месяц
 	}
 
 	// Запуск сервера

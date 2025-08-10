@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -26,9 +25,9 @@ import (
 	ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 */
 
-// ЗАПИСЬ -------------------------------------------------------------------------------------------------------------
+// ЗАПИСИ -------------------------------------------------------------------------------------------------------------
 
-// Создать запись
+// CreateVisit создание записи
 func CreateVisit(c *gin.Context) {
 	var appointment models.Appointment
 
@@ -41,43 +40,12 @@ func CreateVisit(c *gin.Context) {
 		return
 	}
 
-	query := `
-		INSERT INTO appointments (service_id, client_id, start_time)
-		VALUES ($1, $2, $3)
-		RETURNING id
-	`
-
 	// Выполнение SQL-запроса
-	err := database.Pool.QueryRow(context.Background(), query,
-		appointment.ServiceID, appointment.ClientID,
-		appointment.StartTime).Scan(&appointment.ID)
+	err := appointment.Save(c.Request.Context())
 
 	// Если произошла ошибка
 	if err != nil {
-		var statusCode int
-		var errorMessage string
-
-		// Проверка типа ошибки
-		if pgErr, ok := err.(*pgconn.PgError); ok {
-			switch pgErr.Code {
-			case "23503": // foreign_key_violation
-				statusCode = http.StatusBadRequest
-				errorMessage = "Указанная услуга или клиент не существуют"
-			case "23514": // check_violation
-				statusCode = http.StatusBadRequest
-				errorMessage = "Некорректные данные (нарушение ограничения CHECK)"
-			case "23505": // unique_violation
-				statusCode = http.StatusConflict
-				errorMessage = "Такая запись уже существует"
-			default:
-				statusCode = http.StatusInternalServerError
-				errorMessage = "Ошибка базы данных"
-			}
-		} else {
-			statusCode = http.StatusInternalServerError
-			errorMessage = "Не удалось создать запись"
-		}
-
+		statusCode, errorMessage := models.InterpretPgError(err)
 		// Возвращаем детализированный ответ об ошибке
 		c.JSON(statusCode, gin.H{
 			"error":   errorMessage,
@@ -95,10 +63,11 @@ func CreateVisit(c *gin.Context) {
 	c.JSON(http.StatusCreated, appointment)
 }
 
-// Получить список записей
+// GetVisits получение списка записей с фильтрами (результат в виде мапы)
 func GetVisits(c *gin.Context) {
 	startParam := c.DefaultQuery("start", "")
-	onlyUnpaid := c.DefaultQuery("unpaid", "")
+	onlyUnpaidStr := c.DefaultQuery("unpaid", "")
+	onlyUnpaid := onlyUnpaidStr == "true" // Преобразование в bool
 
 	var startTime *time.Time
 	var err error
@@ -113,322 +82,39 @@ func GetVisits(c *gin.Context) {
 		startTime = &parsedStart
 	}
 
-	// Формируем SQL-запрос
-	query := `
-        SELECT id, service_id, client_id, start_time, payment_status
-        FROM appointments
-        WHERE 1 = 1
-    `
-	params := []interface{}{}
-
-	if onlyUnpaid == "true" {
-		query += " AND payment_status = 'unpaid'"
-	}
-	fmt.Println(query)
-	if startTime != nil {
-		query += " AND start_time >= $1"
-		params = append(params, *startTime)
-	}
-	fmt.Println(query)
-
-	// Выполняем запрос
-	rows, err := database.Pool.Query(context.Background(), query, params...)
+	// Выполняем SQL-запрос
+	appointments, err := models.GetAppointments(c.Request.Context(), onlyUnpaid, startTime)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось получить записи"})
 		return
 	}
-	defer rows.Close()
 
 	result := make(map[string]models.Appointment)
 
-	for rows.Next() {
-		var appointment models.Appointment
-		if err := rows.Scan(&appointment.ID, &appointment.ServiceID, &appointment.ClientID, &appointment.StartTime, &appointment.PaymentStatus); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка чтения данных"})
-			return
-		}
-
-		var serviceName string
-		serviceQuery := `SELECT name FROM services WHERE service_id = $1`
-		err = database.Pool.QueryRow(context.Background(), serviceQuery, appointment.ServiceID).Scan(&serviceName)
-		if err != nil {
+	for _, a := range appointments {
+		if err := a.LoadServiceName(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения названия услуги"})
 			return
 		}
-
-		var clientName string
-		clientQuery := `SELECT name FROM clients WHERE clients_id = $1`
-		err = database.Pool.QueryRow(context.Background(), clientQuery, appointment.ClientID).Scan(&clientName)
-		if err != nil {
+		if err := a.LoadClientName(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения имени клиента"})
 			return
 		}
 
-		appointment.ServiceName = serviceName
-		appointment.ClientName = clientName
-
 		key := fmt.Sprintf("%v в %v %v %v",
-			appointment.StartTime.Format("02.01.2006"),
-			appointment.StartTime.Format("15:04"),
-			appointment.ServiceName,
-			appointment.ClientName,
+			a.StartTime.Format("2006.01.02"),
+			a.StartTime.Format("15:04"),
+			a.ServiceName,
+			a.ClientName,
 		)
-		result[key] = appointment
+
+		result[key] = a
 	}
 
 	c.JSON(http.StatusOK, result)
 }
 
-// ... с использованием упорядоченных мап
-/*func GetVisits(c *gin.Context) {
-	startParam := c.DefaultQuery("start", "")
-	onlyUnpaid := c.DefaultQuery("unpaid", "")
-
-	var startTime *time.Time
-	var err error
-
-	// Обработка параметра start
-	if startParam != "" {
-		parsedStart, err := time.Parse("2006-01-02", startParam)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный формат параметра start"})
-			return
-		}
-		_ = &parsedStart
-	}
-
-	// Формируем SQL-запрос
-	query := `
-		SELECT id, service_id, client_id, start_time, payment_status
-		FROM appointments
-		WHERE 1 = 1
-		ORDER BY start_time ASC
-`
-
-	params := []interface{}{}
-
-	if onlyUnpaid == "true" {
-		query += " AND payment_status = 'unpaid'"
-	}
-	if startTime != nil {
-		query += " AND start_time >= $1"
-		params = append(params, *startTime)
-	}
-
-	// Выполняем запрос
-	rows, err := database.Pool.Query(context.Background(), query, params...)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось получить записи"})
-		return
-	}
-	defer rows.Close()
-
-	// Используем orderedmap для упорядоченных ключей
-	result := orderedmap.New()
-
-	for rows.Next() {
-		var appointment models.Appointment
-		if err := rows.Scan(&appointment.ID, &appointment.ServiceID, &appointment.ClientID, &appointment.StartTime, &appointment.PaymentStatus); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка чтения данных"})
-			return
-		}
-
-		var serviceName string
-		serviceQuery := `SELECT name FROM services WHERE service_id = $1`
-		err = database.Pool.QueryRow(context.Background(), serviceQuery, appointment.ServiceID).Scan(&serviceName)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения названия услуги"})
-			return
-		}
-
-		var clientName string
-		clientQuery := `SELECT name FROM clients WHERE clients_id = $1`
-		err = database.Pool.QueryRow(context.Background(), clientQuery, appointment.ClientID).Scan(&clientName)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения имени клиента"})
-			return
-		}
-
-		appointment.ServiceName = serviceName
-		appointment.ClientName = clientName
-
-		key := fmt.Sprintf("%v в %v %v %v",
-			appointment.StartTime.Format("02.01.2006"),
-			appointment.StartTime.Format("15:04"),
-			appointment.ServiceName,
-			appointment.ClientName,
-		)
-
-		// Добавляем запись в orderedmap
-		result.Set(key, appointment)
-	}
-
-	// Возвращаем результат в JSON
-	c.JSON(http.StatusOK, result)
-	fmt.Println(result)
-}*/
-
-// еще вариант
-/*func GetVisits(c *gin.Context) {
-	startParam := c.DefaultQuery("start", "")
-	onlyUnpaid := c.DefaultQuery("unpaid", "")
-
-	var startTime *time.Time
-	var err error
-
-	// Обработка параметра start
-	if startParam != "" {
-		parsedStart, err := time.Parse("2006-01-02", startParam)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный формат параметра start"})
-			return
-		}
-		startTime = &parsedStart
-	}
-
-	// Формируем SQL-запрос
-	query := `
-        SELECT id, service_id, client_id, start_time, payment_status
-        FROM appointments
-        WHERE 1 = 1
-    `
-	params := []interface{}{}
-
-	if onlyUnpaid == "true" {
-		query += " AND payment_status = 'unpaid'"
-	}
-	if startTime != nil {
-		query += " AND start_time >= $1"
-		params = append(params, *startTime)
-	}
-	query += " ORDER BY start_time ASC"
-
-	// Выполняем запрос
-	rows, err := database.Pool.Query(context.Background(), query, params...)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось получить записи"})
-		return
-	}
-	defer rows.Close()
-
-	// Создаём список результатов
-	result := []map[string]interface{}{}
-
-	for rows.Next() {
-		var appointment models.Appointment
-		if err := rows.Scan(&appointment.ID, &appointment.ServiceID, &appointment.ClientID, &appointment.StartTime, &appointment.PaymentStatus); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка чтения данных"})
-			return
-		}
-
-		var serviceName string
-		serviceQuery := `SELECT name FROM services WHERE service_id = $1`
-		err = database.Pool.QueryRow(context.Background(), serviceQuery, appointment.ServiceID).Scan(&serviceName)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения названия услуги"})
-			return
-		}
-
-		var clientName string
-		clientQuery := `SELECT name FROM clients WHERE clients_id = $1`
-		err = database.Pool.QueryRow(context.Background(), clientQuery, appointment.ClientID).Scan(&clientName)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения имени клиента"})
-			return
-		}
-
-		// Генерируем ключ
-		key := fmt.Sprintf("%v в %v %v %v",
-			appointment.StartTime.Format("02.01.2006"),
-			appointment.StartTime.Format("15:04"),
-			serviceName,
-			clientName,
-		)
-
-		// Добавляем в список
-		entry := map[string]interface{}{
-			"key":            key,
-			"id":             appointment.ID,
-			"service_id":     appointment.ServiceID,
-			"client_id":      appointment.ClientID,
-			"start_time":     appointment.StartTime,
-			"payment_status": appointment.PaymentStatus,
-			"service_name":   serviceName,
-			"client_name":    clientName,
-		}
-
-		result = append(result, entry)
-	}
-
-	// Возвращаем результат в формате JSON
-	c.JSON(http.StatusOK, result)
-}*/
-
-// Перенести запись
-func MoveVisit(c *gin.Context) {
-	// Читаем ID записи из URL
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный ID"})
-		return
-	}
-
-	// Читаем данные из тела запроса
-	var appointment models.Appointment
-	if err := c.ShouldBindJSON(&appointment); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверные данные"})
-		return
-	}
-
-	// Выполняем обновление записи
-	query := `
-		UPDATE appointments
-		SET 
-			start_time = COALESCE($1, start_time)
-		WHERE id = $2
-		RETURNING id, start_time;
-	`
-	var updatedAppointment models.Appointment
-	row := database.Pool.QueryRow(
-		context.Background(),
-		query,
-		appointment.StartTime,
-		id,
-	)
-
-	// Чтение обновленной записи
-	if err := row.Scan(&updatedAppointment.ID, &updatedAppointment.StartTime); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Возвращаем обновленную запись
-	c.JSON(http.StatusOK, updatedAppointment)
-}
-
-// Удалить запись по ID
-func DeleteVisit(c *gin.Context) {
-	// Читаем ID записи из URL
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный ID"})
-		return
-	}
-
-	// Выполняем запрос на удаление записи
-	query := `DELETE FROM appointments WHERE id = $1`
-
-	_, err = database.Pool.Exec(context.Background(), query, id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось удалить запись"})
-		return
-	}
-
-	// Возвращаем успешный ответ
-	c.JSON(http.StatusOK, gin.H{"message": "Запись успешно удалена"})
-}
-
-// Обновить статус записи
+// UpdateVisitStatus обновление статуса записи
 func UpdateVisitStatus(c *gin.Context) {
 	// Читаем ID записи из URL
 	id, err := strconv.Atoi(c.Param("id"))
@@ -470,11 +156,9 @@ func UpdateVisitStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, updatedAppointment)
 }
 
-// ОПЛАТА -------------------------------------------------------------------------------------------------------------
-
-// Основная функция изменения статуса оплаты
-func UpdatePaymentStatusMain(c *gin.Context) {
-	// Получаем ID записи из параметров
+// MoveVisit перенос записи
+func MoveVisit(c *gin.Context) {
+	// Читаем ID записи из URL
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный ID"})
@@ -484,185 +168,61 @@ func UpdatePaymentStatusMain(c *gin.Context) {
 	// Читаем данные из тела запроса
 	var appointment models.Appointment
 	if err := c.ShouldBindJSON(&appointment); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверные данные", "details": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверные данные"})
 		return
 	}
 
-	// Открываем транзакцию
-	tx, err := database.Pool.BeginTx(context.Background(), pgx.TxOptions{}) // Передаем правильные параметры
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка начала транзакции", "details": err.Error()})
-		return
-	}
-	defer func() {
-		if p := recover(); p != nil || err != nil {
-			_ = tx.Rollback(context.Background()) // Передаем контекст в Rollback
-		} else {
-			_ = tx.Commit(context.Background()) // Передаем контекст в Commit
-		}
-	}()
-
-	// Обновляем статус оплаты
-	err = UpdatePaymentStatus(tx, id, *appointment.PaymentStatus) // Передаем транзакцию в функцию
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка обновления статуса", "details": err.Error()})
-		return
-	}
-
-	// Если статус оплаты изменяется на "paid", добавляем финансовую операцию
-	if *appointment.PaymentStatus == "paid" {
-		err = UpdatePaymentAmount(tx, id, appointment.ClientID, 0) // Передаем транзакцию
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка добавления финансовой операции", "details": err.Error()})
-			return
-		}
-	}
-
-	// Если статус оплаты изменяется на "partially_paid", добавляем финансовую операцию
-	if *appointment.PaymentStatus == "partially_paid" {
-		err = UpdatePaymentAmount(tx, id, appointment.ClientID, appointment.Amount) // Передаем транзакцию
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка добавления финансовой операции", "details": err.Error()})
-			return
-		}
-	}
-
-	// Успешный ответ
-	c.JSON(http.StatusOK, gin.H{"message": "Статус и данные обновлены успешно"})
-}
-
-// Обновить сумму платежа и создать финансовую операцию
-func UpdatePaymentAmount(tx pgx.Tx, appointmentID int, clientID models.IntString, amount int) error {
-	// Преобразуем clientID в int
-	clientIDInt := IntStringToInt(clientID)
-
-	if amount == 0 {
-		// Сначала извлекаем стоимость записи (cost) из таблицы appointments
-		query := `
-		SELECT cost
-		FROM appointments
-		WHERE id = $1
-	`
-		err := tx.QueryRow(context.Background(), query, appointmentID).Scan(&amount)
-		if err != nil {
-			return fmt.Errorf("не удалось получить стоимость записи: %w", err)
-		}
-	}
-
-	// Теперь создаём финансовую операцию с этой суммой
-	paymentQuery := `
-		INSERT INTO financial_operations (
-			document_number, client_id, purpose, cashbox, amount, cashbox_balance, service_or_product, appointment_id
-		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`
-	documentNumber := fmt.Sprintf("PAY-%d-%d", appointmentID, time.Now().Unix())
-	purpose := "Оплата за услугу"
-	cashbox := "Основная касса"
-	cashboxBalance := amount      // Пример расчёта остатка кассы
-	serviceOrProduct := "service" // Для оплаты услуги
-
-	// Выполнение запроса с добавлением appointment_id
-	_, err := tx.Exec(
-		context.Background(),
-		paymentQuery,
-		documentNumber,
-		clientIDInt, // Теперь передаем clientID как обычное int
-		purpose,
-		cashbox,
-		amount,
-		cashboxBalance,
-		serviceOrProduct,
-		appointmentID, // Добавляем связку с appointment_id
-	)
-	if err != nil {
-		return fmt.Errorf("не удалось добавить финансовую операцию: %w", err)
-	}
-	return nil
-}
-
-// Обновить статус оплаты
-/*func UpdatePaymentStatus(tx pgx.Tx, appointmentID int, paymentStatus string) error {
-	// Запрос для обновления статуса оплаты
+	// Выполняем обновление записи
 	query := `
 		UPDATE appointments
-		SET payment_status = $1
+		SET 
+			start_time = COALESCE($1, start_time)
 		WHERE id = $2
+		RETURNING id, start_time;
 	`
-
-	// Выполнение запроса
-	_, err := tx.Exec(
+	var updatedAppointment models.Appointment
+	row := database.Pool.QueryRow(
 		context.Background(),
 		query,
-		paymentStatus, // Статус оплаты, например 'paid'
-		appointmentID,
+		appointment.StartTime,
+		id,
 	)
+
+	// Чтение обновленной записи
+	if err := row.Scan(&updatedAppointment.ID, &updatedAppointment.StartTime); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Возвращаем обновленную запись
+	c.JSON(http.StatusOK, updatedAppointment)
+}
+
+// DeleteVisit удаление записи
+func DeleteVisit(c *gin.Context) {
+	// Читаем ID записи из URL
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		return fmt.Errorf("не удалось обновить статус оплаты: %w", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный ID"})
+		return
 	}
-	return nil
-}*/
 
-// UpdatePaymentStatus обновляет статус оплаты и удаляет финансовую операцию, если статус оплаты "не оплачено"
-func UpdatePaymentStatus(tx pgx.Tx, appointmentID int, newStatus string) error {
-	// Обновляем статус оплаты в таблице appointments
-	_, err := tx.Exec(context.Background(), `
-		UPDATE appointments
-		SET payment_status = $1
-		WHERE id = $2`, newStatus, appointmentID)
+	// Выполняем запрос на удаление записи
+	query := `DELETE FROM appointments WHERE id = $1`
+
+	_, err = database.Pool.Exec(context.Background(), query, id)
 	if err != nil {
-		return err
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось удалить запись"})
+		return
 	}
 
-	// Если статус "не оплачено", ищем и удаляем связанную финансовую операцию
-	if newStatus == "unpaid" {
-		// Удаляем финансовую операцию, если она существует
-		_, err = tx.Exec(context.Background(), `
-			DELETE FROM financial_operations
-			WHERE appointment_id = $1`, appointmentID)
-		if err != nil {
-			return err
-		}
-
-		// Проверяем, есть ли посещение по абонементу
-		var subscriptionID int
-		err = tx.QueryRow(context.Background(), `
-			SELECT subscription_id
-			FROM subscription_visits
-			WHERE appointment_id = $1`, appointmentID).Scan(&subscriptionID)
-
-		if err != nil && err != pgx.ErrNoRows {
-			return err
-		}
-
-		if err == nil {
-			// Удаляем посещение
-			_, err = tx.Exec(context.Background(), `
-				DELETE FROM subscription_visits
-				WHERE appointment_id = $1`, appointmentID)
-			if err != nil {
-				return err
-			}
-
-			// Восстанавливаем баланс
-			_, err = tx.Exec(context.Background(), `
-				UPDATE subscriptions
-				SET current_balance = current_balance + 1
-				WHERE subscriptions.subscriptions_id = $1`, subscriptionID)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	// Нет необходимости явно делать tx.Commit, так как это сделает вызывающая функция
-	// Если ошибка была, транзакция откатится, если нет — она будет зафиксирована в вызывающей функции
-	return nil
+	// Возвращаем успешный ответ
+	c.JSON(http.StatusOK, gin.H{"message": "Запись успешно удалена"})
 }
 
 // КЛИЕНТЫ ------------------------------------------------------------------------------------------------------------
 
-// Создание клиента
+// CreateClient создание клиента
 func CreateClient(c *gin.Context) {
 	// Структура для входящих данных
 	type Request struct {
@@ -708,7 +268,7 @@ func CreateClient(c *gin.Context) {
 	})
 }
 
-// Поиск клиента по номеру телефона (возвращает id клиента)
+// FindClientByPhoneHandler поиск клиента по номеру телефона (возвращает id клиента)
 func FindClientByPhoneHandler(c *gin.Context) {
 	// Получаем номер телефона из запроса
 	phone := c.Query("phone")
@@ -750,6 +310,8 @@ func FindClientByPhoneHandler(c *gin.Context) {
 		"phone":     normalizedPhone,
 	})
 }
+
+// получение информации о клиенте по id
 
 // GetClientInfoByID - функция для получения информации о клиенте по его ID
 func GetClientInfoByID(clientID int) (map[string]interface{}, error) {
@@ -839,12 +401,12 @@ func GetClientInfoHandler(c *gin.Context) {
 // АБОНЕМЕНТЫ ---------------------------------------------------------------------------------------------------------
 
 // AddSubscriptionVisit добавляет посещение в таблицу subscription_visits
-func AddSubscriptionVisit(tx pgx.Tx, subscriptionID int, visitDate time.Time) error {
+func AddSubscriptionVisit(tx pgx.Tx, subscriptionID int, visitDate time.Time, appointmentID int) error {
 	query := `
-		INSERT INTO subscription_visits (subscription_id, visit_date)
-		VALUES ($1, $2)
+		INSERT INTO subscription_visits (subscription_id, visit_date, appointment_id)
+		VALUES ($1, $2, $3)
 	`
-	_, err := tx.Exec(context.Background(), query, subscriptionID, visitDate)
+	_, err := tx.Exec(context.Background(), query, subscriptionID, visitDate, appointmentID)
 	if err != nil {
 		return fmt.Errorf("ошибка добавления посещения: %w", err)
 	}
@@ -879,6 +441,7 @@ func AddVisitTransaction(c *gin.Context) {
 	// Структура для входящих данных
 	type Request struct {
 		SubscriptionID int       `json:"subscription_id" binding:"required"`
+		AppointmentID  int       `json:"appointment_id" binding:"required"`
 		VisitDate      time.Time `json:"visit_date" binding:"required"`
 	}
 
@@ -905,9 +468,10 @@ func AddVisitTransaction(c *gin.Context) {
 	}()
 
 	// Добавляем посещение
-	err = AddSubscriptionVisit(tx, req.SubscriptionID, req.VisitDate)
+	err = AddSubscriptionVisit(tx, req.SubscriptionID, req.VisitDate, req.AppointmentID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка добавления посещения", "details": err.Error()})
+		fmt.Println("Ошибка добавления посещения", err)
 		return
 	}
 
@@ -915,14 +479,16 @@ func AddVisitTransaction(c *gin.Context) {
 	err = DecreaseSubscriptionBalance(tx, req.SubscriptionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка уменьшения баланса", "details": err.Error()})
+		fmt.Println("Ошибка уменьшения баланса", err)
 		return
 	}
 
 	// Успешный ответ
 	c.JSON(http.StatusOK, gin.H{"message": "Посещение добавлено успешно"})
+	fmt.Println("Посещение добавлено успешно")
 }
 
-// GetActiveSubscription возвращает subscription_id и текущий баланс для клиента с положительным балансом
+// GetActiveSubscriptionID возвращает subscription_id и текущий баланс для клиента с положительным балансом
 func GetActiveSubscriptionID(clientID, serviceID int) (int, int, error) {
 	query := `
 		SELECT s.subscriptions_id, s.current_balance
@@ -943,7 +509,7 @@ func GetActiveSubscriptionID(clientID, serviceID int) (int, int, error) {
 	return subscriptionID, currentBalance, nil
 }
 
-// Handler для вызова GetActiveSubscription через HTTP-запрос
+// GetActiveSubscriptionHandler для вызова GetActiveSubscriptionID через HTTP-запрос
 // передаем аргументы: client_id и service_id
 func GetActiveSubscriptionHandler(c *gin.Context) {
 	// Структура для входящих данных
@@ -1040,7 +606,7 @@ func GetSubscriptionsHandler(c *gin.Context) {
 	})
 }
 
-// Получить список типов абонементов
+// GetSubscriptionTypes Получить список типов абонементов
 func GetSubscriptionTypes(c *gin.Context) {
 	query := `
 		SELECT subscription_types_id, name, cost, sessions_count, service_ids
@@ -1071,7 +637,7 @@ func GetSubscriptionTypes(c *gin.Context) {
 	c.JSON(http.StatusOK, subscriptionTypes)
 }
 
-// Продажа абонемента
+// SellSubscription Продажа абонемента
 // аргументы: client_id, subscription_types_id, cost
 func SellSubscription(c *gin.Context) {
 	var request struct {
@@ -1145,9 +711,200 @@ func SellSubscription(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Абонемент успешно продан и добавлен", "subscription": subscriptionTypeName})
 }
 
+// ОПЛАТА -------------------------------------------------------------------------------------------------------------
+
+// UpdatePaymentStatusMain Основная функция изменения статуса оплаты
+func UpdatePaymentStatusMain(c *gin.Context) {
+	// Получаем ID записи из параметров
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный ID"})
+		return
+	}
+
+	// Читаем данные из тела запроса
+	var appointment models.Appointment
+	if err := c.ShouldBindJSON(&appointment); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверные данные", "details": err.Error()})
+		return
+	}
+
+	// Открываем транзакцию
+	tx, err := database.Pool.BeginTx(context.Background(), pgx.TxOptions{}) // Передаем правильные параметры
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка начала транзакции", "details": err.Error()})
+		return
+	}
+	defer func() {
+		if p := recover(); p != nil || err != nil {
+			_ = tx.Rollback(context.Background()) // Передаем контекст в Rollback
+		} else {
+			_ = tx.Commit(context.Background()) // Передаем контекст в Commit
+		}
+	}()
+
+	// Обновляем статус оплаты
+	err = UpdatePaymentStatus(tx, id, *appointment.PaymentStatus) // Передаем транзакцию в функцию
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка обновления статуса", "details": err.Error()})
+		return
+	}
+
+	// Если статус оплаты изменяется на "paid", добавляем финансовую операцию
+	if *appointment.PaymentStatus == "paid" {
+		err = UpdatePaymentAmount(tx, id, appointment.ClientID, 0) // Передаем транзакцию
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка добавления финансовой операции", "details": err.Error()})
+			return
+		}
+	}
+
+	// Если статус оплаты изменяется на "partially_paid", добавляем финансовую операцию
+	if *appointment.PaymentStatus == "partially_paid" {
+		err = UpdatePaymentAmount(tx, id, appointment.ClientID, appointment.Amount) // Передаем транзакцию
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка добавления финансовой операции", "details": err.Error()})
+			return
+		}
+	}
+
+	// Успешный ответ
+	c.JSON(http.StatusOK, gin.H{"message": "Статус и данные обновлены успешно"})
+}
+
+// UpdatePaymentAmount Обновить сумму платежа и создать финансовую операцию
+func UpdatePaymentAmount(tx pgx.Tx, appointmentID int, clientID models.IntString, amount int) error {
+	// Преобразуем clientID в int
+	clientIDInt := IntStringToInt(clientID)
+
+	if amount == 0 {
+		// Сначала извлекаем стоимость записи (cost) из таблицы appointments
+		query := `
+		SELECT cost
+		FROM appointments
+		WHERE id = $1
+	`
+		err := tx.QueryRow(context.Background(), query, appointmentID).Scan(&amount)
+		if err != nil {
+			return fmt.Errorf("не удалось получить стоимость записи: %w", err)
+		}
+	}
+
+	// Теперь создаём финансовую операцию с этой суммой
+	paymentQuery := `
+		INSERT INTO financial_operations (
+			document_number, client_id, purpose, cashbox, amount, cashbox_balance, service_or_product, appointment_id
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`
+	documentNumber := fmt.Sprintf("PAY-%d-%d", appointmentID, time.Now().Unix())
+	purpose := "Оплата за услугу"
+	cashbox := "Основная касса"
+	cashboxBalance := amount      // Пример расчёта остатка кассы
+	serviceOrProduct := "service" // Для оплаты услуги
+
+	// Выполнение запроса с добавлением appointment_id
+	_, err := tx.Exec(
+		context.Background(),
+		paymentQuery,
+		documentNumber,
+		clientIDInt, // Теперь передаем clientID как обычное int
+		purpose,
+		cashbox,
+		amount,
+		cashboxBalance,
+		serviceOrProduct,
+		appointmentID, // Добавляем связку с appointment_id
+	)
+	if err != nil {
+		return fmt.Errorf("не удалось добавить финансовую операцию: %w", err)
+	}
+	return nil
+}
+
+// Обновить статус оплаты
+/*func UpdatePaymentStatus(tx pgx.Tx, appointmentID int, paymentStatus string) error {
+	// Запрос для обновления статуса оплаты
+	query := `
+		UPDATE appointments
+		SET payment_status = $1
+		WHERE id = $2
+	`
+
+	// Выполнение запроса
+	_, err := tx.Exec(
+		context.Background(),
+		query,
+		paymentStatus, // Статус оплаты, например 'paid'
+		appointmentID,
+	)
+	if err != nil {
+		return fmt.Errorf("не удалось обновить статус оплаты: %w", err)
+	}
+	return nil
+}*/
+
+// UpdatePaymentStatus обновляет статус оплаты и удаляет финансовую операцию, если статус оплаты "не оплачено"
+func UpdatePaymentStatus(tx pgx.Tx, appointmentID int, newStatus string) error {
+	fmt.Println(appointmentID)
+	// Обновляем статус оплаты в таблице appointments
+	_, err := tx.Exec(context.Background(), `
+		UPDATE appointments
+		SET payment_status = $1
+		WHERE id = $2`, newStatus, appointmentID)
+	if err != nil {
+		return err
+	}
+
+	// Если статус "не оплачено", ищем и удаляем связанную финансовую операцию
+	if newStatus == "unpaid" {
+		// Удаляем финансовую операцию, если она существует
+		_, err = tx.Exec(context.Background(), `
+			DELETE FROM financial_operations
+			WHERE appointment_id = $1`, appointmentID)
+		if err != nil {
+			return err
+		}
+
+		// Проверяем, есть ли посещение по абонементу
+		var subscriptionID int
+		err = tx.QueryRow(context.Background(), `
+			SELECT subscription_id
+			FROM subscription_visits
+			WHERE appointment_id = $1`, appointmentID).Scan(&subscriptionID)
+
+		if err != nil && err != pgx.ErrNoRows {
+			return err
+		}
+
+		if err == nil {
+			// Удаляем посещение
+			_, err = tx.Exec(context.Background(), `
+				DELETE FROM subscription_visits
+				WHERE appointment_id = $1`, appointmentID)
+			if err != nil {
+				return err
+			}
+
+			// Восстанавливаем баланс
+			_, err = tx.Exec(context.Background(), `
+				UPDATE subscriptions
+				SET current_balance = current_balance + 1
+				WHERE subscriptions.subscriptions_id = $1`, subscriptionID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Нет необходимости явно делать tx.Commit, так как это сделает вызывающая функция
+	// Если ошибка была, транзакция откатится, если нет — она будет зафиксирована в вызывающей функции
+	return nil
+}
+
 // СТАТИСТИКА ---------------------------------------------------------------------------------------------------------
 
-// Получение статистики за период (количество посещений, сумма по услугам, товарам)
+// GetStatisticsHandler Получение статистики за период (количество посещений, сумма по услугам, товарам)
 func GetStatisticsHandler(c *gin.Context) {
 	type Request struct {
 		StartDate string `json:"start_date" binding:"required"`
@@ -1238,7 +995,7 @@ func GetStatistics(startDate, endDate time.Time) (models.Statistics, error) {
 	return stats, nil
 }
 
-// Получение статистики за текущий месяц (с 1-го числа до сегодняшнего дня)
+// GetCurrentMonthStatisticsHandler Получение статистики за текущий месяц (с 1-го числа до сегодняшнего дня)
 func GetCurrentMonthStatisticsHandler(c *gin.Context) {
 	// Текущее время
 	now := time.Now()
@@ -1261,7 +1018,8 @@ func GetCurrentMonthStatisticsHandler(c *gin.Context) {
 // АДМИНИСТРИРОВАНИЕ --------------------------------------------------------------------------------------------------
 
 // Абонементы
-// Добавить тип абонемента
+
+// AddSubscriptionType Добавить тип абонемента
 // аргументы: name, cost, sessions_count, service_ids (integer[])
 func AddSubscriptionType(c *gin.Context) {
 	type Request struct {
@@ -1295,7 +1053,8 @@ func AddSubscriptionType(c *gin.Context) {
 }
 
 // Услуги
-// Добавить услугу
+
+// AddService Добавить услугу
 // аргументы: name, duration, price
 func AddService(c *gin.Context) {
 	var req models.Service
@@ -1320,7 +1079,7 @@ func AddService(c *gin.Context) {
 
 }
 
-// Получить список услуг
+// GetServices Получить список услуг
 func GetServices(c *gin.Context) {
 	query := `
 		SELECT service_id, name, duration, price
@@ -1351,7 +1110,7 @@ func GetServices(c *gin.Context) {
 	c.JSON(http.StatusOK, servicesMap)
 }
 
-// Удалить услугу по ID
+// DeleteService Удалить услугу по ID
 func DeleteService(c *gin.Context) {
 	// Читаем ID записи из URL
 	id, err := strconv.Atoi(c.Param("id"))
@@ -1375,7 +1134,7 @@ func DeleteService(c *gin.Context) {
 
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ --------------------------------------------------------------------------------------------
 
-// Функция для преобразования IntString в int
+// IntStringToInt Функция для преобразования IntString в int
 func IntStringToInt(value models.IntString) int {
 	return int(value)
 }

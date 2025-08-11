@@ -38,8 +38,8 @@ func (i *IntString) UnmarshalJSON(data []byte) error {
 
 // Appointment - структура для записи на прием
 type Appointment struct {
-	ID                int        `json:"id"`
-	Cost              int        `json:"cost"`
+	ID                uint       `json:"id"`
+	Cost              uint       `json:"cost"`
 	ServiceID         IntString  `json:"service_id"`         // Используем указатель для возможности проверки, передано ли значение
 	ClientID          IntString  `json:"client_id"`          // Используем указатель
 	StartTime         *time.Time `json:"start_time"`         // Используем указатель для времени
@@ -61,7 +61,7 @@ func (a *Appointment) Save(ctx context.Context) error {
 	return database.Pool.QueryRow(ctx, query, a.ServiceID, a.ClientID, a.StartTime).Scan(&a.ID)
 }
 
-// Helper для обработки ошибок PG (можно вынести в отдельный пакет, если надо)
+// Helper для обработки ошибок PG
 func InterpretPgError(err error) (int, string) {
 	if pgErr, ok := err.(*pgconn.PgError); ok {
 		switch pgErr.Code {

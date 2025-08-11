@@ -92,6 +92,7 @@ func GetVisits(c *gin.Context) {
 	result := make(map[string]models.Appointment)
 
 	for _, a := range appointments {
+
 		if err := a.LoadServiceName(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения названия услуги"})
 			return
@@ -107,7 +108,6 @@ func GetVisits(c *gin.Context) {
 			a.ServiceName,
 			a.ClientName,
 		)
-
 		result[key] = a
 	}
 
@@ -237,7 +237,8 @@ func CreateClient(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверные данные", "details": err.Error()})
 		return
 	}
-	fmt.Println(req)
+	//fmt.Println(req)
+
 	// Форматируем номер телефона
 	normalizedPhone := normalizePhone(req.Phone)
 	if len(normalizedPhone) != 11 {
@@ -272,7 +273,7 @@ func CreateClient(c *gin.Context) {
 func FindClientByPhoneHandler(c *gin.Context) {
 	// Получаем номер телефона из запроса
 	phone := c.Query("phone")
-	fmt.Println(phone)
+	//fmt.Println(phone)
 	if phone == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Номер телефона обязателен",
@@ -471,7 +472,7 @@ func AddVisitTransaction(c *gin.Context) {
 	err = AddSubscriptionVisit(tx, req.SubscriptionID, req.VisitDate, req.AppointmentID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка добавления посещения", "details": err.Error()})
-		fmt.Println("Ошибка добавления посещения", err)
+		//fmt.Println("Ошибка добавления посещения", err)
 		return
 	}
 
@@ -479,13 +480,13 @@ func AddVisitTransaction(c *gin.Context) {
 	err = DecreaseSubscriptionBalance(tx, req.SubscriptionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка уменьшения баланса", "details": err.Error()})
-		fmt.Println("Ошибка уменьшения баланса", err)
+		//fmt.Println("Ошибка уменьшения баланса", err)
 		return
 	}
 
 	// Успешный ответ
 	c.JSON(http.StatusOK, gin.H{"message": "Посещение добавлено успешно"})
-	fmt.Println("Посещение добавлено успешно")
+	//fmt.Println("Посещение добавлено успешно")
 }
 
 // GetActiveSubscriptionID возвращает subscription_id и текущий баланс для клиента с положительным балансом
@@ -633,7 +634,7 @@ func GetSubscriptionTypes(c *gin.Context) {
 		key := fmt.Sprintf("%v", subType.Name)
 		subscriptionTypes[key] = subType
 	}
-	fmt.Println(subscriptionTypes)
+	//fmt.Println(subscriptionTypes)
 	c.JSON(http.StatusOK, subscriptionTypes)
 }
 
@@ -846,7 +847,7 @@ func UpdatePaymentAmount(tx pgx.Tx, appointmentID int, clientID models.IntString
 
 // UpdatePaymentStatus обновляет статус оплаты и удаляет финансовую операцию, если статус оплаты "не оплачено"
 func UpdatePaymentStatus(tx pgx.Tx, appointmentID int, newStatus string) error {
-	fmt.Println(appointmentID)
+	//fmt.Println(appointmentID)
 	// Обновляем статус оплаты в таблице appointments
 	_, err := tx.Exec(context.Background(), `
 		UPDATE appointments
@@ -991,7 +992,7 @@ func GetStatistics(startDate, endDate time.Time) (models.Statistics, error) {
 		TotalServices:      coalesceFloat64(totalServices),
 		TotalSubscriptions: coalesceFloat64(totalSubscriptions),
 	}
-	fmt.Println(stats)
+	//fmt.Println(stats)
 	return stats, nil
 }
 
@@ -1106,7 +1107,7 @@ func GetServices(c *gin.Context) {
 		key := fmt.Sprintf("%v - %v мин. %v руб.", service.Name, service.Duration, service.Price)
 		servicesMap[key] = service
 	}
-	fmt.Println(servicesMap)
+	//fmt.Println(servicesMap)
 	c.JSON(http.StatusOK, servicesMap)
 }
 

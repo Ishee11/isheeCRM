@@ -1,19 +1,24 @@
 services:
   app:
-    image: ishee/appointment-service-app:latest
-    container_name: appointment-service-app-container
+    image: ${APP_IMAGE:?APP_IMAGE is required}:${IMAGE_TAG:-latest}
+    container_name: ${APP_CONTAINER_NAME:-appointment-service-app-container}
+    restart: unless-stopped
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: 87363699
-      DB_NAME: isheecrm
+      DB_HOST: ${DB_HOST:?DB_HOST is required}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      DB_NAME: ${DB_NAME:?DB_NAME is required}
     ports:
-      - "8080:8080"
+      - "${APP_PORT:-8080}:8080"
     networks:
       - appointment-service_app-network
-    depends_on:
-      - postgres
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 networks:
   appointment-service_app-network:

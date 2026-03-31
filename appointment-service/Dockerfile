@@ -1,5 +1,4 @@
-# Шаг 1: Используем базовый образ Go на основе Alpine для сборки приложения
-FROM golang:alpine AS builder
+FROM golang:1.23.2-alpine AS builder
 # Добавляем метку для удобства идентификации этапа
 LABEL stage=gobuilder
 # Отключаем использование C-библиотек для сборки статического бинарника
@@ -16,9 +15,9 @@ COPY . .
 RUN go build -ldflags="-s -w" -o /app/main .
 
 # Шаг 2: Используем минимальный образ Alpine для запуска приложения
-FROM alpine
+FROM alpine:3.20
 # Добавляем сертификаты для поддержки HTTPS
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates wget
 # Указываем рабочую директорию для приложения
 WORKDIR /app
 # Копируем собранный бинарный файл из builder-образа в конечный образ

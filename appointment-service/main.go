@@ -11,6 +11,9 @@ import (
 func main() {
 	router := gin.Default()
 	router.StaticFile("/", "./test.html")
+	router.GET("/healthz", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
+	})
 	/*router.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -23,8 +26,7 @@ func main() {
 	})*/
 
 	// Подключение к базе данных
-	err := database.ConnectDB()
-	if err != nil {
+	if err := database.ConnectDB(); err != nil {
 		log.Fatalf("Не удалось подключиться к базе данных: %v", err)
 	}
 	defer database.Close() // Закрываем соединение при завершении программы
@@ -81,6 +83,8 @@ func main() {
 	}
 
 	// Запуск сервера
-	fmt.Println("Сервер запущен на :8080")
-	log.Fatal(router.Run("0.0.0.0:8080"))
+	fmt.Println("Запуск сервера на :8080")
+	if err := router.Run(":8080"); err != nil {
+		log.Fatalf("Ошибка запуска сервера: %v", err)
+	}
 }

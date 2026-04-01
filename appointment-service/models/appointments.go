@@ -40,10 +40,10 @@ func (i *IntString) UnmarshalJSON(data []byte) error {
 type Appointment struct {
 	ID                uint       `json:"id"`
 	Cost              uint       `json:"cost"`
-	ServiceID         IntString  `json:"service_id"`         // Используем указатель для возможности проверки, передано ли значение
-	ClientID          IntString  `json:"client_id"`          // Используем указатель
-	StartTime         *time.Time `json:"start_time"`         // Используем указатель для времени
-	Price             IntString  `json:"price"`              // Используем указатель для цены
+	ServiceID         IntString  `json:"service_id"`
+	ClientID          IntString  `json:"client_id"`
+	StartTime         *time.Time `json:"start_time"` // Используем указатель для времени
+	Price             IntString  `json:"price"`
 	PaymentStatus     *string    `json:"payment_status"`     // Используем указатель для статуса оплаты
 	AppointmentStatus *string    `json:"appointment_status"` // Используем указатель для статуса записи
 	Amount            int        `json:"amount"`             // Сумма оплаты

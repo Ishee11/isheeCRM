@@ -1,91 +1,377 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>CRM Прототип</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h2 { margin-top: 30px; }
-        button { margin-top: 5px; }
-        pre { background: #f0f0f0; padding: 10px; border-radius: 5px; white-space: pre-wrap; }
-        input { margin: 5px 0; padding: 5px; }
-    </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>isheeCRM — Прототип UI</title>
+<style>
+  :root{--bg:#f7f9fb;--card:#ffffff;--muted:#6b7280;--accent:#0366d6;}
+  body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;background:var(--bg);color:#111;}
+  .wrap{max-width:1100px;margin:24px auto;padding:20px;}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+  h1{font-size:20px;margin:0}
+  .hint{color:var(--muted);font-size:13px}
+  .grid{display:grid;grid-template-columns:1fr 380px;gap:16px}
+  .card{background:var(--card);border-radius:10px;padding:14px;box-shadow:0 1px 0 rgba(0,0,0,0.06)}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  input[type="text"], input[type="number"], select {padding:8px;border:1px solid #e6e9ee;border-radius:6px;min-width:0}
+  button{background:var(--accent);color:#fff;border:0;padding:8px 10px;border-radius:6px;cursor:pointer}
+  button.ghost{background:transparent;color:var(--accent);border:1px solid #e6eefc}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:8px 10px;border-bottom:1px solid #f0f2f5;text-align:left}
+  th{font-weight:600;color:#333;background:transparent}
+  .muted{color:var(--muted);font-size:13px}
+  .small{font-size:13px}
+  .pager{display:flex;gap:8px;align-items:center;margin-top:10px}
+  .empty{padding:30px;text-align:center;color:var(--muted)}
+  .details{position:sticky;top:20px}
+  .kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #f0f2f5}
+  pre{background:#f4f6f8;padding:8px;border-radius:6px;overflow:auto}
+  .ok{color:green;font-weight:600}
+  .err{color:#b91c1c;font-weight:600}
+  footer{margin-top:18px;color:var(--muted);font-size:13px}
+  @media(max-width:980px){.grid{grid-template-columns:1fr;}.details{position:relative;top:auto}}
+</style>
 </head>
 <body>
-<h1>CRM Прототип (только GET-ручки)</h1>
+<div class="wrap">
+  <header>
+    <h1>isheeCRM — Интерактивный прототип</h1>
+    <div class="hint">Тестовая страница для GET-ручек сервиса (visits, clients, services, subscriptions, statistics)</div>
+  </header>
 
-<section>
-    <h2>Записи</h2>
-    <button onclick="loadData('/visits/', 'visits')">Получить список записей</button>
-    <pre id="visits"></pre>
-</section>
+  <div style="margin-bottom:12px" class="card small">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <label class="muted">API база:</label>
+      <input id="apiBase" type="text" placeholder="Оставь пустым для того же хоста (например /)" style="width:260px" value="">
+      <button onclick="saveApiBase()">Сохранить</button>
+      <button class="ghost" onclick="resetApiBase()">Сброс</button>
+      <div style="margin-left:auto" class="muted">Если сервер отдаёт страницу — оставь поле пустым.</div>
+    </div>
+  </div>
 
-<section>
-    <h2>Поиск клиента по телефону</h2>
-    <input id="phone" placeholder="Введите номер телефона">
-    <button onclick="searchClient()">Искать</button>
-    <pre id="client-search"></pre>
-</section>
+  <div class="grid">
+    <main>
+      <!-- VISITS -->
+      <section class="card" id="visitsCard">
+        <h3 style="margin:0 0 8px 0">Записи (visits)</h3>
 
-<section>
-    <h2>Инфо о клиенте по ID</h2>
-    <input id="clientId" placeholder="Введите ID клиента">
-    <button onclick="getClientInfo()">Получить</button>
-    <pre id="client-info"></pre>
-</section>
+        <div class="controls">
+          <input id="v_client_id" type="number" placeholder="client_id" />
+          <select id="v_status">
+            <option value="">— статус —</option>
+            <option value="scheduled">scheduled</option>
+            <option value="done">done</option>
+            <option value="cancelled">cancelled</option>
+          </select>
+          <input id="v_from" type="date" title="С" />
+          <input id="v_to" type="date" title="По" />
+          <button onclick="loadVisits(1)">Поиск</button>
+          <button class="ghost" onclick="clearVisitsFilters()">Сброс</button>
+        </div>
 
-<section>
-    <h2>Типы абонементов</h2>
-    <button onclick="loadData('/subscriptions/types', 'subs-types')">Получить типы</button>
-    <pre id="subs-types"></pre>
-</section>
+        <div id="visitsTableWrap"></div>
+      </section>
 
-<section>
-    <h2>Абонементы клиента</h2>
-    <input id="subsClientId" placeholder="Введите ID клиента">
-    <button onclick="getClientSubs()">Получить</button>
-    <pre id="subs-client"></pre>
-</section>
+      <!-- CLIENTS -->
+      <section class="card" style="margin-top:14px">
+        <h3 style="margin:0 0 8px 0">Клиенты</h3>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="phoneQ" type="text" placeholder="Поиск по телефону" />
+          <button onclick="searchClientByPhone()">Найти</button>
+          <div class="muted" style="margin-left:auto">Пример: +71234567890</div>
+        </div>
+        <div id="clientFindRes" style="margin-top:10px"></div>
 
-<section>
-    <h2>Услуги</h2>
-    <button onclick="loadData('/services/', 'services')">Получить список услуг</button>
-    <pre id="services"></pre>
-</section>
+        <hr style="margin:12px 0" />
 
-<section>
-    <h2>Статистика за текущий месяц</h2>
-    <button onclick="loadData('/statistics/current-month', 'stats')">Получить статистику</button>
-    <pre id="stats"></pre>
-</section>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="clientIdQ" type="number" placeholder="client_id" />
+          <button onclick="getClientInfo()">Получить info</button>
+          <button class="ghost" onclick="clearClientInfo()">Сброс</button>
+        </div>
+        <div id="clientInfoRes" style="margin-top:10px"></div>
+      </section>
+
+      <!-- SERVICES -->
+      <section class="card" style="margin-top:14px">
+        <h3 style="margin:0 0 8px 0">Услуги (services)</h3>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button onclick="loadServices()">Загрузить список услуг</button>
+          <div class="muted" style="margin-left:auto">read-only</div>
+        </div>
+        <div id="servicesRes" style="margin-top:10px"></div>
+      </section>
+
+      <!-- SUBSCRIPTIONS -->
+      <section class="card" style="margin-top:14px">
+        <h3 style="margin:0 0 8px 0">Абонементы</h3>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button onclick="loadSubscriptionTypes()">Типы абонементов</button>
+          <input id="subsClientQ" type="number" placeholder="client_id" />
+          <button onclick="loadClientSubs()">Абонементы клиента</button>
+        </div>
+        <div id="subsRes" style="margin-top:10px"></div>
+      </section>
+
+      <!-- STATISTICS -->
+      <section class="card" style="margin-top:14px">
+        <h3 style="margin:0 0 8px 0">Статистика (текущий месяц)</h3>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button onclick="loadStatisticsCurrentMonth()">Показать</button>
+          <div class="muted" style="margin-left:auto">Показывает: total_visits, total_earnings ...</div>
+        </div>
+        <div id="statsRes" style="margin-top:10px"></div>
+      </section>
+    </main>
+
+    <aside class="details">
+      <div class="card">
+        <h3 style="margin:0 0 8px 0">Детали / Логи</h3>
+        <div id="detailPanel" class="small muted">Выберите запись или клиента для деталей.</div>
+        <hr />
+        <div id="logPanel" style="max-height:360px;overflow:auto"><pre id="logPre">Готово.</pre></div>
+      </div>
+    </aside>
+  </div>
+
+  <footer>
+    <div class="muted small">Подсказка: сервер отдаёт этот файл? тогда API базу можно оставить пустой (relative requests). </div>
+  </footer>
+</div>
 
 <script>
-const API_URL = 'http://localhost:8080';
+/* ============== Настройки ============== */
+let API = (function(){ return (document.getElementById('apiBase').value || '').trim(); })(); // relative by default
 
-async function loadData(endpoint, outputId) {
-    try {
-        const res = await fetch(API_URL + endpoint);
-        const data = await res.json();
-        document.getElementById(outputId).textContent = JSON.stringify(data, null, 2);
-    } catch (err) {
-        document.getElementById(outputId).textContent = 'Ошибка: ' + err;
+function apiBase() {
+  const val = (document.getElementById('apiBase').value || '').trim();
+  if (val === '') return ''; // relative paths -> same host
+  // ensure no trailing slash
+  return val.replace(/\/$/, '');
+}
+
+function saveApiBase(){ API = apiBase(); log('API base set to: ' + (API||'(same origin)')); }
+function resetApiBase(){ document.getElementById('apiBase').value=''; saveApiBase(); }
+
+/* ============== Утилиты ============== */
+function log(msg){
+  const pre = document.getElementById('logPre');
+  const ts = new Date().toLocaleTimeString();
+  pre.textContent = `[${ts}] ${msg}\n` + pre.textContent;
+}
+
+async function doFetch(path, opts = {}) {
+  const url = (API || apiBase() ) + path;
+  log(`fetch ${url}`);
+  try {
+    const res = await fetch(url, opts);
+    if (!res.ok) {
+      const txt = await res.text().catch(()=>null);
+      log(`HTTP ${res.status} ${res.statusText} ${txt ? ' — ' + txt : ''}`);
+      throw new Error(res.status + ' ' + res.statusText + (txt ? ' — ' + txt : ''));
     }
+    const ctype = res.headers.get('content-type') || '';
+    if (ctype.includes('application/json')) return await res.json();
+    return await res.text();
+  } catch (e) {
+    log('Ошибка: ' + e);
+    throw e;
+  }
 }
 
-async function searchClient() {
-    const phone = document.getElementById('phone').value;
-    loadData(`/clients/find?phone=${encodeURIComponent(phone)}`, 'client-search');
+/* ============== VISITS (GET /visits/) ============== */
+let visitsState = { page:1, perPage:15, total:0, items:[] };
+
+function clearVisitsFilters(){
+  document.getElementById('v_client_id').value='';
+  document.getElementById('v_status').value='';
+  document.getElementById('v_from').value='';
+  document.getElementById('v_to').value='';
+  loadVisits(1);
 }
 
-async function getClientInfo() {
-    const id = document.getElementById('clientId').value;
-    loadData(`/clients/info?client_id=${encodeURIComponent(id)}`, 'client-info');
+async function loadVisits(page=1){
+  visitsState.page = page;
+  const client_id = document.getElementById('v_client_id').value;
+  const status = document.getElementById('v_status').value;
+  const from = document.getElementById('v_from').value;
+  const to = document.getElementById('v_to').value;
+  // build query — адаптируй под реальные параметры бэка
+  const params = new URLSearchParams();
+  if (client_id) params.set('client_id', client_id);
+  if (status) params.set('status', status);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  params.set('page', page);
+  params.set('per_page', visitsState.perPage);
+
+  const out = document.getElementById('visitsTableWrap');
+  out.innerHTML = '<div class="muted small">Загрузка...</div>';
+  try {
+    const data = await doFetch('/visits/?' + params.toString());
+    // ожидаем, что бэкенд отдаёт массив или {items:[], total: N}
+    let items = [], total = 0;
+    if (Array.isArray(data)) { items = data; total = data.length; }
+    else { items = data.items || data.visits || []; total = data.total || items.length; }
+    visitsState.items = items; visitsState.total = total;
+    renderVisitsTable();
+  } catch (e) {
+    out.innerHTML = `<div class="err">Ошибка: ${e.message}</div>`;
+  }
 }
 
-async function getClientSubs() {
-    const id = document.getElementById('subsClientId').value;
-    loadData(`/subscriptions/client?client_id=${encodeURIComponent(id)}`, 'subs-client');
+function renderVisitsTable(){
+  const out = document.getElementById('visitsTableWrap');
+  const items = visitsState.items;
+  if (!items || items.length === 0) {
+    out.innerHTML = '<div class="empty">Список пуст. Нажмите "Поиск" или снимите фильтры.</div>';
+    return;
+  }
+  const rows = items.map(it => {
+    // основные поля: адаптируй в зависимости от реальной структуры
+    const id = it.id || it.visit_id || it.id_visit || it.visitId || '-';
+    const client = it.client_name || (it.client && (it.client.name || it.client.fullname)) || (it.client_phone||'-');
+    const date = it.date || it.scheduled_at || it.time || '-';
+    const status = it.status || '-';
+    return `<tr data-id="${id}" onclick="selectVisit('${id}')">
+      <td>${id}</td><td>${escapeHtml(client)}</td><td class="small">${date}</td><td>${status}</td>
+    </tr>`;
+  }).join('');
+  const html = `<table>
+    <thead><tr><th>ID</th><th>Клиент</th><th>Дата/время</th><th>Статус</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="pager">
+    <div class="muted">Всего: ${visitsState.total}</div>
+    <div style="margin-left:auto">
+      <button class="ghost" onclick="loadVisits(${Math.max(1, visitsState.page-1)})">◀</button>
+      <span class="muted small">Стр ${visitsState.page}</span>
+      <button onclick="loadVisits(${visitsState.page+1})">▶</button>
+    </div>
+  </div>`;
+  out.innerHTML = html;
 }
+
+function selectVisit(id){
+  const item = visitsState.items.find(x => (x.id==id || x.visit_id==id || x.visitId==id || x.id_visit==id));
+  if (!item) {
+    document.getElementById('detailPanel').textContent = 'Детали не найдены';
+    return;
+  }
+  const dp = document.getElementById('detailPanel');
+  dp.innerHTML = '';
+  const createKV = (k,v) => `<div class="kv"><div class="muted">${k}</div><div>${escapeHtml(String(v===undefined?'':v))}</div></div>`;
+  dp.innerHTML += `<div style="font-weight:700;margin-bottom:6px">Запись ID: ${escapeHtml(item.id||item.visit_id||item.visitId||'')}</div>`;
+  // Показываем ключевые поля
+  dp.innerHTML += createKV('Клиент', item.client_name || item.client?.name || item.client_phone || '-');
+  dp.innerHTML += createKV('Дата/время', item.date || item.scheduled_at || '-');
+  dp.innerHTML += createKV('Статус', item.status || '-');
+  dp.innerHTML += createKV('Услуга', item.service_name || item.service || '-');
+  dp.innerHTML += `<div style="margin-top:8px"><button onclick='showRaw(${JSON.stringify(JSON.stringify(item))})'>Показать JSON</button></div>`;
+}
+
+/* ============== CLIENTS ============== */
+async function searchClientByPhone(){
+  const phone = document.getElementById('phoneQ').value.trim();
+  if (!phone) { document.getElementById('clientFindRes').innerHTML = '<div class="muted">Введите телефон</div>'; return; }
+  const out = document.getElementById('clientFindRes'); out.innerHTML = 'Загрузка...';
+  try {
+    const data = await doFetch('/clients/find?phone=' + encodeURIComponent(phone));
+    out.innerHTML = `<pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+  } catch (e) {
+    out.innerHTML = `<div class="err">Ошибка: ${e.message}</div>`;
+  }
+}
+
+async function getClientInfo(){
+  const id = document.getElementById('clientIdQ').value.trim();
+  if (!id) { document.getElementById('clientInfoRes').innerHTML = '<div class="muted">Введите client_id</div>'; return; }
+  const out = document.getElementById('clientInfoRes'); out.innerHTML = 'Загрузка...';
+  try {
+    const data = await doFetch('/clients/info?client_id=' + encodeURIComponent(id));
+    document.getElementById('clientInfoRes').innerHTML = `<pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+  } catch (e) {
+    out.innerHTML = `<div class="err">Ошибка: ${e.message}</div>`;
+  }
+}
+
+function clearClientInfo(){
+  document.getElementById('clientIdQ').value=''; document.getElementById('clientInfoRes').innerHTML='';
+}
+
+/* ============== SERVICES ============== */
+async function loadServices(){
+  const out = document.getElementById('servicesRes'); out.innerHTML = 'Загрузка...';
+  try {
+    const data = await doFetch('/services/');
+    if (!Array.isArray(data) && data.services) data = data.services;
+    if (!data || data.length===0) { out.innerHTML = '<div class="empty">Услуги не найдены</div>'; return; }
+    const rows = data.map(s => `<tr><td>${s.service_id||s.id||'-'}</td><td>${escapeHtml(s.name||s.title||'-')}</td><td>${s.duration||'-'}</td><td>${s.price||'-'}</td></tr>`).join('');
+    out.innerHTML = `<table><thead><tr><th>ID</th><th>Название</th><th>Длч, мин</th><th>Цена</th></tr></thead><tbody>${rows}</tbody></table>`;
+  } catch (e) {
+    out.innerHTML = `<div class="err">Ошибка: ${e.message}</div>`;
+  }
+}
+
+/* ============== SUBSCRIPTIONS ============== */
+async function loadSubscriptionTypes(){
+  const out = document.getElementById('subsRes'); out.innerHTML = 'Загрузка типов...';
+  try {
+    const data = await doFetch('/subscriptions/types');
+    out.innerHTML = `<pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+  } catch (e) {
+    out.innerHTML = `<div class="err">Ошибка: ${e.message}</div>`;
+  }
+}
+
+async function loadClientSubs(){
+  const id = document.getElementById('subsClientQ').value.trim();
+  if (!id) { document.getElementById('subsRes').innerHTML = '<div class="muted">Введите client_id</div>'; return; }
+  const out = document.getElementById('subsRes'); out.innerHTML = 'Загрузка...';
+  try {
+    const data = await doFetch('/subscriptions/client?client_id=' + encodeURIComponent(id));
+    out.innerHTML = `<pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+  } catch (e) {
+    out.innerHTML = `<div class="err">Ошибка: ${e.message}</div>`;
+  }
+}
+
+/* ============== STATISTICS ============== */
+async function loadStatisticsCurrentMonth(){
+  const out = document.getElementById('statsRes'); out.innerHTML = 'Загрузка...';
+  try {
+    const data = await doFetch('/statistics/current-month');
+    if (typeof data === 'string') {
+      out.innerHTML = `<pre>${escapeHtml(data)}</pre>`;
+      return;
+    }
+    // ожидаем: { total_visits, total_earnings, total_services, total_subscriptions }
+    const keys = ['total_visits','total_earnings','total_services','total_subscriptions'];
+    const html = keys.map(k => `<div class="kv"><div class="muted">${k}</div><div>${escapeHtml(String(data[k]||0))}</div></div>`).join('');
+    out.innerHTML = html;
+  } catch (e) {
+    out.innerHTML = `<div class="err">Ошибка: ${e.message}</div>`;
+  }
+}
+
+/* ============== Helpers ============== */
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+
+function showRaw(jsonStr){
+  document.getElementById('detailPanel').innerHTML = `<pre>${escapeHtml(jsonStr)}</pre>`;
+}
+
+/* ============== Init ============== */
+(function init(){
+  // leave API blank for same-origin behavior
+  document.getElementById('apiBase').value = '';
+  saveApiBase();
+  // try initial loads (non-blocking)
+  // loadVisits(1); // don't auto-load — избегаем лишних запросов
+})();
 </script>
 </body>
 </html>

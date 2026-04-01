@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>CRM Прототип</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h2 { margin-top: 30px; }
+        button { margin-top: 5px; }
+        pre { background: #f0f0f0; padding: 10px; border-radius: 5px; white-space: pre-wrap; }
+        input { margin: 5px 0; padding: 5px; }
+    </style>
+</head>
+<body>
+<h1>CRM Прототип (только GET-ручки)</h1>
+
+<section>
+    <h2>Записи</h2>
+    <button onclick="loadData('/visits/', 'visits')">Получить список записей</button>
+    <pre id="visits"></pre>
+</section>
+
+<section>
+    <h2>Поиск клиента по телефону</h2>
+    <input id="phone" placeholder="Введите номер телефона">
+    <button onclick="searchClient()">Искать</button>
+    <pre id="client-search"></pre>
+</section>
+
+<section>
+    <h2>Инфо о клиенте по ID</h2>
+    <input id="clientId" placeholder="Введите ID клиента">
+    <button onclick="getClientInfo()">Получить</button>
+    <pre id="client-info"></pre>
+</section>
+
+<section>
+    <h2>Типы абонементов</h2>
+    <button onclick="loadData('/subscriptions/types', 'subs-types')">Получить типы</button>
+    <pre id="subs-types"></pre>
+</section>
+
+<section>
+    <h2>Абонементы клиента</h2>
+    <input id="subsClientId" placeholder="Введите ID клиента">
+    <button onclick="getClientSubs()">Получить</button>
+    <pre id="subs-client"></pre>
+</section>
+
+<section>
+    <h2>Услуги</h2>
+    <button onclick="loadData('/services/', 'services')">Получить список услуг</button>
+    <pre id="services"></pre>
+</section>
+
+<section>
+    <h2>Статистика за текущий месяц</h2>
+    <button onclick="loadData('/statistics/current-month', 'stats')">Получить статистику</button>
+    <pre id="stats"></pre>
+</section>
+
+<script>
+const API_URL = 'http://localhost:8080';
+
+async function loadData(endpoint, outputId) {
+    try {
+        const res = await fetch(API_URL + endpoint);
+        const data = await res.json();
+        document.getElementById(outputId).textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+        document.getElementById(outputId).textContent = 'Ошибка: ' + err;
+    }
+}
+
+async function searchClient() {
+    const phone = document.getElementById('phone').value;
+    loadData(`/clients/find?phone=${encodeURIComponent(phone)}`, 'client-search');
+}
+
+async function getClientInfo() {
+    const id = document.getElementById('clientId').value;
+    loadData(`/clients/info?client_id=${encodeURIComponent(id)}`, 'client-info');
+}
+
+async function getClientSubs() {
+    const id = document.getElementById('subsClientId').value;
+    loadData(`/subscriptions/client?client_id=${encodeURIComponent(id)}`, 'subs-client');
+}
+</script>
+</body>
+</html>

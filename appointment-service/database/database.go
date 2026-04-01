@@ -3,9 +3,9 @@ package database
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -51,25 +51,23 @@ func ConnectDB() error {
 	// Формируем строку подключения
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?client_encoding=UTF8", user, password, host, port, dbname)
 
-	// Создаем контекст
-	ctx := context.Background()
+	// Создаем контекст с таймаутом, чтобы подключение не висело вечно
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	// Подключаемся к базе данных PostgreSQL
 	Pool, err = pgxpool.New(ctx, dsn)
 	if err != nil {
-		log.Fatal("Ошибка подключения к базе данных PostgreSQL:", err)
-		return nil
+		return fmt.Errorf("Ошибка подключения к базе данных PostgreSQL: %w", err)
 	}
 
 	// Проверяем соединение с базой данных
 	err = Pool.Ping(ctx)
 	if err != nil {
 		Pool.Close()
-		log.Fatal("Не удалось выполнить ping базы данных:", err)
-		return nil
+		return fmt.Errorf("Не удалось выполнить ping базы данных: %w", err)
 	}
 
 	fmt.Println("Подключение к базе данных PostgreSQL успешно выполнено")
-
 	return nil
 }

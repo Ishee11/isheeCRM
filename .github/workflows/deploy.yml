@@ -8,7 +8,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/isheecrm-appointment-service
 
 jobs:
   build-and-push:
@@ -51,7 +50,8 @@ jobs:
         id: meta
         run: |
           IMAGE_TAG="${GITHUB_SHA::7}"
-          IMAGE_REF="${REGISTRY}/${IMAGE_NAME}"
+          IMAGE_OWNER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          IMAGE_REF="${REGISTRY}/${IMAGE_OWNER}/isheecrm-appointment-service"
           echo "image_tag=${IMAGE_TAG}" >> "${GITHUB_OUTPUT}"
           echo "image_ref=${IMAGE_REF}" >> "${GITHUB_OUTPUT}"
 

@@ -4,6 +4,7 @@ import (
 	"appointment-service/database"
 	"appointment-service/handlers"
 	"fmt"
+	"os"
 	"github.com/gin-gonic/gin"
 	"log"
 )
@@ -13,6 +14,13 @@ func main() {
 	router.StaticFile("/", "./test.html")
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
+	})
+	router.GET("/version", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":    "ok",
+			"image_tag": getenv("IMAGE_TAG", "unknown"),
+			"app_image": getenv("APP_IMAGE", "unknown"),
+		})
 	})
 	/*router.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
@@ -87,4 +95,12 @@ func main() {
 	if err := router.Run(":8080"); err != nil {
 		log.Fatalf("Ошибка запуска сервера: %v", err)
 	}
+}
+
+func getenv(key, fallback string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	return value
 }

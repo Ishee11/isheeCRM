@@ -46,8 +46,10 @@
       <input id="apiBase" type="text" placeholder="Оставь пустым для того же хоста (например /)" style="width:260px" value="">
       <button onclick="saveApiBase()">Сохранить</button>
       <button class="ghost" onclick="resetApiBase()">Сброс</button>
+      <button class="ghost" onclick="loadVersion()">Проверить версию</button>
       <div style="margin-left:auto" class="muted">Если сервер отдаёт страницу — оставь поле пустым.</div>
     </div>
+    <div id="versionBar" class="muted small" style="margin-top:10px">Версия не загружена.</div>
   </div>
 
   <div class="grid">
@@ -180,6 +182,17 @@ async function doFetch(path, opts = {}) {
   }
 }
 
+async function loadVersion() {
+  const out = document.getElementById('versionBar');
+  out.textContent = 'Загрузка версии...';
+  try {
+    const data = await doFetch('/version');
+    out.textContent = `Текущий билд: ${data.image_tag || 'unknown'} | Образ: ${data.app_image || 'unknown'}`;
+  } catch (e) {
+    out.textContent = `Версия недоступна: ${e.message}`;
+  }
+}
+
 /* ============== VISITS (GET /visits/) ============== */
 let visitsState = { page:1, perPage:15, total:0, items:[] };
 
@@ -304,8 +317,8 @@ function clearClientInfo(){
 async function loadServices(){
   const out = document.getElementById('servicesRes'); out.innerHTML = 'Загрузка...';
   try {
-    const data = await doFetch('/services/');
-    if (!Array.isArray(data) && data.services) data = data.services;
+    const response = await doFetch('/services/');
+    const data = Array.isArray(response) ? response : (response.services || []);
     if (!data || data.length===0) { out.innerHTML = '<div class="empty">Услуги не найдены</div>'; return; }
     const rows = data.map(s => `<tr><td>${s.service_id||s.id||'-'}</td><td>${escapeHtml(s.name||s.title||'-')}</td><td>${s.duration||'-'}</td><td>${s.price||'-'}</td></tr>`).join('');
     out.innerHTML = `<table><thead><tr><th>ID</th><th>Название</th><th>Длч, мин</th><th>Цена</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -369,6 +382,7 @@ function showRaw(jsonStr){
   // leave API blank for same-origin behavior
   document.getElementById('apiBase').value = '';
   saveApiBase();
+  loadVersion();
   // try initial loads (non-blocking)
   // loadVisits(1); // don't auto-load — избегаем лишних запросов
 })();

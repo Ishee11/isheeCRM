@@ -23,6 +23,8 @@ services:
     container_name: ${APP_CONTAINER_NAME:-appointment-service-app-container}
     restart: unless-stopped
     environment:
+      APP_IMAGE: ${APP_IMAGE:?APP_IMAGE is required}
+      IMAGE_TAG: ${IMAGE_TAG:-latest}
       DB_HOST: ${DB_HOST:-postgres}
       DB_PORT: ${DB_PORT:-5432}
       DB_USER: ${DB_USER:?DB_USER is required}

@@ -12,9 +12,11 @@ import (
 func main() {
 	router := gin.Default()
 	router.StaticFile("/", "./test.html")
-	router.GET("/healthz", func(c *gin.Context) {
+	healthHandler := func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
-	})
+	}
+	router.GET("/healthz", healthHandler)
+	router.HEAD("/healthz", healthHandler)
 	router.GET("/version", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status":    "ok",

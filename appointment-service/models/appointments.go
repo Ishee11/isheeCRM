@@ -82,7 +82,7 @@ func GetAppointments(ctx context.Context, onlyUnpaid bool, start *time.Time) ([]
 	query := `
 		SELECT id, service_id, client_id, start_time, payment_status
 		FROM appointments
-		WHERE 1=1
+		WHERE deleted_at IS NULL
 	`
 	params := []interface{}{}
 	paramIndex := 1

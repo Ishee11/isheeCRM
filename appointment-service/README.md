@@ -5,6 +5,9 @@
 - `.env.example` with all required runtime variables
 - `docker-compose-app.yml` for server deployment from a published image
 - `docker-compose.yml` for local/dev with PostgreSQL
+- `docker-compose-postgres.yml` for production PostgreSQL 17.6 with persistent host storage
+- `backup-db.sh` for logical PostgreSQL backups
+- `restore-db.sh` for restoring PostgreSQL from a dump
 - `deploy.sh` as the single deployment entrypoint on the server
 - `.github/workflows/deploy.yml` for build, push and deploy
 
@@ -41,6 +44,81 @@ chmod +x deploy.sh
 ```bash
 docker network create appointment-service_app-network
 ```
+
+7. For production PostgreSQL, set these values in `.env`:
+   - `POSTGRES_IMAGE=postgres:17.6-bookworm`
+   - `POSTGRES_BIND_ADDRESS=127.0.0.1`
+   - `POSTGRES_DATA_DIR=/var/lib/isheecrm/postgres`
+   - `POSTGRES_BACKUP_DIR=/var/backups/isheecrm`
+   - `POSTGRES_BACKUP_RETENTION_DAYS=7`
+
+## Production database flow
+
+### 1. First boot of PostgreSQL on the server
+
+Use a bind mount so data survives container recreation:
+
+```bash
+cd appointment-service
+docker network create appointment-service_app-network || true
+docker compose --env-file .env -f docker-compose-postgres.yml up -d
+```
+
+The database files will live on the host in `POSTGRES_DATA_DIR`, not inside the container.
+
+### 2. Restore from the dump in the repository root
+
+The repository root currently contains a PostgreSQL custom-format dump:
+
+```text
+../isheecrm_20260329030001.dump
+```
+
+This dump was made by PostgreSQL `17.6`, so the server database container should stay on PostgreSQL `17.x`. Restore it like this:
+
+```bash
+cd appointment-service
+./restore-db.sh ../isheecrm_20260329030001.dump
+```
+
+The script will:
+
+- stop the app container if it is running
+- start PostgreSQL 17.6
+- drop and recreate the target database
+- restore from the dump
+- run `ALTER DATABASE ... REFRESH COLLATION VERSION`
+- run `REINDEX DATABASE`
+- start the app again
+
+### 3. Normal operation
+
+For normal app deploys, keep using:
+
+```bash
+cd appointment-service
+IMAGE_TAG=<git-sha> ./deploy.sh
+```
+
+This only updates the app container. The PostgreSQL data stays in `POSTGRES_DATA_DIR` and survives `docker compose down` or container recreation as long as you do not remove the host directory.
+
+## Backups
+
+Create a backup:
+
+```bash
+cd appointment-service
+./backup-db.sh
+```
+
+The backup is written to `POSTGRES_BACKUP_DIR` in PostgreSQL custom format (`.dump`), which is suitable for `pg_restore`.
+
+Recommended production policy:
+
+- keep backups outside the container filesystem
+- copy backups to remote object storage or another server
+- test restore regularly on a clean PostgreSQL 17 container
+- never rely on the Docker container itself as a backup
 
 ## Manual deploy on the server
 

@@ -120,6 +120,20 @@ Recommended production policy:
 - test restore regularly on a clean PostgreSQL 17 container
 - never rely on the Docker container itself as a backup
 
+## Schema migrations
+
+SQL migrations live in `migrations/`.
+
+Apply them against the PostgreSQL container like this:
+
+```bash
+cd appointment-service
+chmod +x apply-migrations.sh
+./apply-migrations.sh
+```
+
+The current migration set adds baseline indexes and constraints, introduces `deleted_at` for soft delete, replaces risky client cascades with restrictive foreign keys, and creates the `client_stats` view for derived client metrics.
+
 ## Manual deploy on the server
 
 ```bash

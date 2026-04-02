@@ -215,12 +215,20 @@ func DeleteVisit(c *gin.Context) {
 		return
 	}
 
-	// Выполняем запрос на удаление записи
-	query := `DELETE FROM appointments WHERE id = $1`
+	// Помечаем запись удаленной, чтобы не терять историю оплат и посещений
+	query := `
+		UPDATE appointments
+		SET deleted_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL
+	`
 
-	_, err = database.Pool.Exec(context.Background(), query, id)
+	tag, err := database.Pool.Exec(context.Background(), query, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось удалить запись"})
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Запись не найдена"})
 		return
 	}
 
@@ -294,7 +302,7 @@ func FindClientByPhoneHandler(c *gin.Context) {
 	normalizedPhone := normalizePhone(phone)
 
 	var clientID int
-	query := `SELECT clients.clients_id FROM clients WHERE phone = $1`
+	query := `SELECT clients.clients_id FROM clients WHERE phone = $1 AND deleted_at IS NULL`
 
 	// Выполняем запрос к базе данных с нормализованным телефоном
 	err := database.Pool.QueryRow(context.Background(), query, normalizedPhone).Scan(&clientID)
@@ -327,10 +335,23 @@ func GetClientInfoByID(clientID int) (map[string]interface{}, error) {
 	// Запрос для получения информации о клиенте
 	query := `
 		SELECT 
-			name, phone, email, categories, birth_date, paid, spent, gender, discount, 
-			last_visit, first_visit, visit_count, comment 
-		FROM clients 
-		WHERE clients_id = $1
+			c.name,
+			c.phone,
+			c.email,
+			c.categories,
+			c.birth_date,
+			cs.paid,
+			cs.spent,
+			c.gender,
+			c.discount,
+			cs.last_visit,
+			cs.first_visit,
+			cs.visit_count,
+			c.comment
+		FROM clients c
+		LEFT JOIN client_stats cs ON cs.clients_id = c.clients_id
+		WHERE c.clients_id = $1
+		  AND c.deleted_at IS NULL
 	`
 
 	// Структура для хранения результатов запроса
@@ -506,6 +527,7 @@ func GetActiveSubscriptionID(clientID, serviceID int) (int, int, error) {
 		WHERE s.client_id = $1
 		  AND $2 = ANY(st.service_ids)
 		  AND s.current_balance > 0
+		  AND s.deleted_at IS NULL
 		LIMIT 1
 	`
 
@@ -555,6 +577,7 @@ func GetSubscriptionsByClientID(clientID int) ([]map[string]interface{}, error) 
 		SELECT subscriptions_id, current_balance
 		FROM subscriptions
 		WHERE client_id = $1
+		  AND deleted_at IS NULL
 	`
 
 	rows, err := database.Pool.Query(context.Background(), query, clientID)
@@ -964,9 +987,11 @@ func GetStatistics(startDate, endDate time.Time) (models.Statistics, error) {
 		
 			UNION ALL
 		
-			SELECT visit_date
-			FROM subscription_visits
-			WHERE visit_date BETWEEN $1::date AND $2::date
+			SELECT sv.visit_date
+			FROM subscription_visits sv
+			LEFT JOIN appointments a ON a.id = sv.appointment_id
+			WHERE sv.visit_date BETWEEN $1::date AND $2::date
+			  AND (sv.appointment_id IS NULL OR a.deleted_at IS NULL)
 		)
 		SELECT
 			(SELECT COUNT(*) FROM all_visits) AS total_visits, -- Теперь считаем все посещения из объединенной выборки
@@ -976,7 +1001,15 @@ func GetStatistics(startDate, endDate time.Time) (models.Statistics, error) {
 		FROM
 			financial_operations fo
 		WHERE
-			fo.operation_date::date BETWEEN $1::date AND $2::date;
+			fo.operation_date::date BETWEEN $1::date AND $2::date
+			AND (
+				fo.appointment_id IS NULL OR EXISTS (
+					SELECT 1
+					FROM appointments a
+					WHERE a.id = fo.appointment_id
+					  AND a.deleted_at IS NULL
+				)
+			);
 	`
 	// Используем указатели для обработки возможных NULL
 	var totalVisits int
@@ -1093,6 +1126,7 @@ func GetServices(c *gin.Context) {
 	query := `
 		SELECT service_id, name, duration, price
 		FROM services
+		WHERE deleted_at IS NULL
 	`
 
 	rows, err := database.Pool.Query(context.Background(), query)
@@ -1128,12 +1162,20 @@ func DeleteService(c *gin.Context) {
 		return
 	}
 
-	// Выполняем запрос на удаление записи
-	query := `DELETE FROM services WHERE service_id = $1`
+	// Помечаем услугу удаленной, чтобы не ломать историю записей
+	query := `
+		UPDATE services
+		SET deleted_at = NOW()
+		WHERE service_id = $1 AND deleted_at IS NULL
+	`
 
-	_, err = database.Pool.Exec(context.Background(), query, id)
+	tag, err := database.Pool.Exec(context.Background(), query, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось удалить запись"})
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Услуга не найдена"})
 		return
 	}
 

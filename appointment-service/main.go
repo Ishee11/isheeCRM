@@ -2,11 +2,18 @@ package main
 
 import (
 	"appointment-service/database"
-	"appointment-service/handlers"
+	controllerhttp "appointment-service/internal/controller/http"
+	postgresrepo "appointment-service/internal/repository/postgres"
+	appointmentsuc "appointment-service/internal/usecase/appointments"
+	"appointment-service/internal/usecase/billing"
+	clientsuc "appointment-service/internal/usecase/clients"
+	servicesuc "appointment-service/internal/usecase/services"
+	statisticsuc "appointment-service/internal/usecase/statistics"
+	subscriptionsuc "appointment-service/internal/usecase/subscriptions"
 	"fmt"
-	"os"
 	"github.com/gin-gonic/gin"
 	"log"
+	"os"
 )
 
 func main() {
@@ -41,55 +48,85 @@ func main() {
 	}
 	defer database.Close() // Закрываем соединение при завершении программы
 
+	billingRepository := postgresrepo.NewBillingRepository(database.Pool)
+	billingService := billing.NewService(billing.Dependencies{
+		TxManager:                  billingRepository,
+		SubscriptionVisitWriter:    billingRepository,
+		SubscriptionBalanceRepo:    billingRepository,
+		ActiveSubscriptionFinder:   billingRepository,
+		ClientSubscriptionLister:   billingRepository,
+		SubscriptionTypeCatalog:    billingRepository,
+		SubscriptionSeller:         billingRepository,
+		PaymentStatusUpdater:       billingRepository,
+		AppointmentPaymentOperator: billingRepository,
+		PaymentRollbackRepo:        billingRepository,
+	})
+	appointmentsRepository := postgresrepo.NewAppointmentsRepository(database.Pool)
+	appointmentsService := appointmentsuc.NewService(appointmentsRepository)
+	clientsRepository := postgresrepo.NewClientsRepository(database.Pool)
+	clientsService := clientsuc.NewService(clientsRepository)
+	servicesRepository := postgresrepo.NewServicesRepository(database.Pool)
+	servicesService := servicesuc.NewService(servicesRepository)
+	statisticsRepository := postgresrepo.NewStatisticsRepository(database.Pool)
+	statisticsService := statisticsuc.NewService(statisticsRepository)
+	subscriptionsRepository := postgresrepo.NewSubscriptionsRepository(database.Pool)
+	subscriptionsService := subscriptionsuc.NewService(subscriptionsRepository)
+	controllerhttp.SetBillingService(billingService)
+	controllerhttp.SetAppointmentsService(appointmentsService)
+	controllerhttp.SetClientsService(clientsService)
+	controllerhttp.SetServicesService(servicesService)
+	controllerhttp.SetStatisticsService(statisticsService)
+	controllerhttp.SetSubscriptionService(subscriptionsService)
+
 	// Настраиваем обработчик для добавления активности
 	// ЗАПИСИ
 	visitsGroup := router.Group("/visits")
 	{
-		visitsGroup.POST("/", handlers.CreateVisit)                // создание записи
-		visitsGroup.GET("/", handlers.GetVisits)                   // получение списка записей с фильтрами
-		visitsGroup.PUT("/status/:id", handlers.UpdateVisitStatus) // обновление статуса записи
-		visitsGroup.PUT("/move/:id", handlers.MoveVisit)           // перенос записи
-		visitsGroup.DELETE("/:id", handlers.DeleteVisit)           // удаление записи
+		visitsGroup.POST("/", controllerhttp.CreateVisit)                // создание записи
+		visitsGroup.GET("/", controllerhttp.GetVisits)                   // получение списка записей с фильтрами
+		visitsGroup.PUT("/status/:id", controllerhttp.UpdateVisitStatus) // обновление статуса записи
+		visitsGroup.PUT("/move/:id", controllerhttp.MoveVisit)           // перенос записи
+		visitsGroup.DELETE("/:id", controllerhttp.DeleteVisit)           // удаление записи
 	}
 
 	// КЛИЕНТЫ
 	clientsGroup := router.Group("/clients")
 	{
-		clientsGroup.POST("/", handlers.CreateClient)                // создание клиента
-		clientsGroup.GET("/find", handlers.FindClientByPhoneHandler) // поиск клиента по номеру телефона
-		clientsGroup.GET("/info", handlers.GetClientInfoHandler)     // получение информации о клиенте по id
+		clientsGroup.POST("/", controllerhttp.CreateClient)                // создание клиента
+		clientsGroup.GET("/find", controllerhttp.FindClientByPhoneHandler) // поиск клиента по номеру телефона
+		clientsGroup.GET("/info", controllerhttp.GetClientInfoHandler)     // получение информации о клиенте по id
 	}
 
 	// АБОНЕМЕНТЫ
 	subscriptionsGroup := router.Group("/subscriptions")
 	{
-		subscriptionsGroup.POST("/search", handlers.GetActiveSubscriptionHandler) // найти абонемент с положительным балансом
-		subscriptionsGroup.POST("/sell", handlers.SellSubscription)               // продажа абонемента
-		subscriptionsGroup.POST("/add", handlers.AddSubscriptionType)             // добавить тип абонемента
-		subscriptionsGroup.GET("/types", handlers.GetSubscriptionTypes)           // получить список типов абонементов
-		subscriptionsGroup.GET("/client", handlers.GetSubscriptionsHandler)       // получение списка абонементов клиента
+		subscriptionsGroup.POST("/search", controllerhttp.GetActiveSubscriptionHandler) // найти абонемент с положительным балансом
+		subscriptionsGroup.POST("/sell", controllerhttp.SellSubscription)               // продажа абонемента
+		subscriptionsGroup.POST("/add", controllerhttp.AddSubscriptionType)             // добавить тип абонемента
+		subscriptionsGroup.GET("/types", controllerhttp.GetSubscriptionTypes)           // получить список типов абонементов
+		subscriptionsGroup.GET("/client", controllerhttp.GetSubscriptionsHandler)       // получение списка абонементов клиента
 	}
 
 	// УСЛУГИ
 	serviceGroup := router.Group("/services")
 	{
-		serviceGroup.POST("/add", handlers.AddService)      // добавить услугу
-		serviceGroup.GET("/", handlers.GetServices)         // список услуг
-		serviceGroup.DELETE("/:id", handlers.DeleteService) // удалить услугу
+		serviceGroup.POST("/add", controllerhttp.AddService)      // добавить услугу
+		serviceGroup.GET("/", controllerhttp.GetServices)         // список услуг
+		serviceGroup.DELETE("/:id", controllerhttp.DeleteService) // удалить услугу
 	}
 
 	// ОПЛАТА
 	paymentsGroup := router.Group("/payments")
 	{
-		paymentsGroup.POST("/subscription", handlers.AddVisitTransaction)  // оплата абонементом
-		paymentsGroup.PUT("/visits/:id", handlers.UpdatePaymentStatusMain) // обновление статуса оплаты для записи
+		paymentsGroup.POST("/subscription", controllerhttp.AddVisitTransaction)  // оплата абонементом
+		paymentsGroup.PUT("/visits/:id", controllerhttp.UpdatePaymentStatusMain) // обновление статуса оплаты для записи
 	}
 
 	// СТАТИСТИКА
 	statisticsGroup := router.Group("/statistics")
 	{
-		statisticsGroup.POST("/", handlers.GetStatisticsHandler)                         // статистика
-		statisticsGroup.GET("/current-month", handlers.GetCurrentMonthStatisticsHandler) // за этот месяц
+		statisticsGroup.POST("/", controllerhttp.GetStatisticsHandler)                         // статистика
+		statisticsGroup.GET("/current-month", controllerhttp.GetCurrentMonthStatisticsHandler) // за этот месяц
 	}
 
 	// Запуск сервера

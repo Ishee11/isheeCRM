@@ -1,0 +1,16 @@
+x
+#!/bin/bash
+
+# Указываем имя базы данных и путь к файлу бэкапа
+DB_NAME="isheecrm"
+BACKUP_PATH="/root/${DB_NAME}_$(date +%Y%m%d%H%M%S).dump"
+
+# Выполняем бэкап базы данных, указываем имя контейнера вместо localhost
+pg_dump -U postgres -h postgres-container -F c -f "$BACKUP_PATH" "$DB_NAME"
+
+# Загружаем бэкап в Google Drive с помощью rclone
+rclone copy "$BACKUP_PATH" gdrive:/backups/
+
+# Удаляем локальный файл бэкапа после загрузки
+rm "$BACKUP_PATH"
+

@@ -3,3 +3,9 @@
 !.env.example
 *.log
 
+# agent artifacts
+/.codex
+
+# dumps and recovered database snapshots
+*.dump
+recovered/

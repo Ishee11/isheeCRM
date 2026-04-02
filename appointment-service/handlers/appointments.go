@@ -523,9 +523,9 @@ func GetActiveSubscriptionID(clientID, serviceID int) (int, int, error) {
 	query := `
 		SELECT s.subscriptions_id, s.current_balance
 		FROM subscriptions s
-		JOIN subscription_types st ON s.subscription_types_id = st.subscription_types_id
+		JOIN subscription_type_services sts ON sts.subscription_type_id = s.subscription_types_id
 		WHERE s.client_id = $1
-		  AND $2 = ANY(st.service_ids)
+		  AND sts.service_id = $2
 		  AND s.current_balance > 0
 		  AND s.deleted_at IS NULL
 		LIMIT 1
@@ -641,8 +641,20 @@ func GetSubscriptionsHandler(c *gin.Context) {
 // GetSubscriptionTypes Получить список типов абонементов
 func GetSubscriptionTypes(c *gin.Context) {
 	query := `
-		SELECT subscription_types_id, name, cost, sessions_count, service_ids
-		FROM subscription_types
+		SELECT
+			st.subscription_types_id,
+			st.name,
+			st.cost,
+			st.sessions_count,
+			COALESCE(
+				array_agg(sts.service_id ORDER BY sts.service_id)
+				FILTER (WHERE sts.service_id IS NOT NULL),
+				'{}'::integer[]
+			) AS service_ids
+		FROM subscription_types st
+		LEFT JOIN subscription_type_services sts
+			ON sts.subscription_type_id = st.subscription_types_id
+		GROUP BY st.subscription_types_id, st.name, st.cost, st.sessions_count
 	`
 
 	rows, err := database.Pool.Query(context.Background(), query)

@@ -1,8 +1,13 @@
 package app
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"appointment-service/database"
 	controllerhttp "appointment-service/internal/controller/http"
@@ -16,15 +21,54 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Run bootstraps the HTTP stack, connects to the database and starts the server.
 func Run() error {
+	router := newRouter()
+
+	if err := database.ConnectDB(); err != nil {
+		return fmt.Errorf("connect db: %w", err)
+	}
+	defer database.Close()
+
+	setupServices()
+
+	addr := fmt.Sprintf(":%s", getenv("APP_PORT", "8080"))
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: router,
+	}
+
+	errs := make(chan error, 1)
+	go func() {
+		fmt.Printf("Запуск сервера на %s\n", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errs <- err
+			return
+		}
+		errs <- nil
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case sig := <-quit:
+		fmt.Printf("получен сигнал %s, завершение...\n", sig)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			return fmt.Errorf("shutdown: %w", err)
+		}
+		return nil
+	case err := <-errs:
+		return err
+	}
+}
+
+func newRouter() *gin.Engine {
 	router := gin.Default()
 	router.StaticFile("/", "./test.html")
-	healthHandler := func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
-	}
-	router.GET("/healthz", healthHandler)
-	router.HEAD("/healthz", healthHandler)
+	router.GET("/healthz", healthHandler())
+	router.HEAD("/healthz", healthHandler())
 	router.GET("/version", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status":    "ok",
@@ -32,46 +76,14 @@ func Run() error {
 			"app_image": getenv("APP_IMAGE", "unknown"),
 		})
 	})
-
-	if err := database.ConnectDB(); err != nil {
-		return fmt.Errorf("vault db: %w", err)
-	}
-	defer database.Close()
-
-	billingRepository := postgresrepo.NewBillingRepository(database.Pool)
-	billingService := billing.NewService(billing.Dependencies{
-		TxManager:                  billingRepository,
-		SubscriptionVisitWriter:    billingRepository,
-		SubscriptionBalanceRepo:    billingRepository,
-		ActiveSubscriptionFinder:   billingRepository,
-		ClientSubscriptionLister:   billingRepository,
-		SubscriptionTypeCatalog:    billingRepository,
-		SubscriptionSeller:         billingRepository,
-		PaymentStatusUpdater:       billingRepository,
-		AppointmentPaymentOperator: billingRepository,
-		PaymentRollbackRepo:        billingRepository,
-	})
-	appointmentsRepository := postgresrepo.NewAppointmentsRepository(database.Pool)
-	appointmentsService := appointmentsuc.NewService(appointmentsRepository)
-	clientsRepository := postgresrepo.NewClientsRepository(database.Pool)
-	clientsService := clientsuc.NewService(clientsRepository)
-	servicesRepository := postgresrepo.NewServicesRepository(database.Pool)
-	servicesService := servicesuc.NewService(servicesRepository)
-	statisticsRepository := postgresrepo.NewStatisticsRepository(database.Pool)
-	statisticsService := statisticsuc.NewService(statisticsRepository)
-	subscriptionsRepository := postgresrepo.NewSubscriptionsRepository(database.Pool)
-	subscriptionsService := subscriptionsuc.NewService(subscriptionsRepository)
-	controllerhttp.SetBillingService(billingService)
-	controllerhttp.SetAppointmentsService(appointmentsService)
-	controllerhttp.SetClientsService(clientsService)
-	controllerhttp.SetServicesService(servicesService)
-	controllerhttp.SetStatisticsService(statisticsService)
-	controllerhttp.SetSubscriptionService(subscriptionsService)
-
 	setupRoutes(router)
-	addr := fmt.Sprintf(":%s", getenv("APP_PORT", "8080"))
-	fmt.Printf("Запуск сервера на %s\n", addr)
-	return router.Run(addr)
+	return router
+}
+
+func healthHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
+	}
 }
 
 func setupRoutes(router *gin.Engine) {
@@ -118,6 +130,38 @@ func setupRoutes(router *gin.Engine) {
 		statisticsGroup.POST("/", controllerhttp.GetStatisticsHandler)
 		statisticsGroup.GET("/current-month", controllerhttp.GetCurrentMonthStatisticsHandler)
 	}
+}
+
+func setupServices() {
+	billingRepository := postgresrepo.NewBillingRepository(database.Pool)
+	billingService := billing.NewService(billing.Dependencies{
+		TxManager:                  billingRepository,
+		SubscriptionVisitWriter:    billingRepository,
+		SubscriptionBalanceRepo:    billingRepository,
+		ActiveSubscriptionFinder:   billingRepository,
+		ClientSubscriptionLister:   billingRepository,
+		SubscriptionTypeCatalog:    billingRepository,
+		SubscriptionSeller:         billingRepository,
+		PaymentStatusUpdater:       billingRepository,
+		AppointmentPaymentOperator: billingRepository,
+		PaymentRollbackRepo:        billingRepository,
+	})
+	appointmentsRepository := postgresrepo.NewAppointmentsRepository(database.Pool)
+	appointmentsService := appointmentsuc.NewService(appointmentsRepository)
+	clientsRepository := postgresrepo.NewClientsRepository(database.Pool)
+	clientsService := clientsuc.NewService(clientsRepository)
+	servicesRepository := postgresrepo.NewServicesRepository(database.Pool)
+	servicesService := servicesuc.NewService(servicesRepository)
+	statisticsRepository := postgresrepo.NewStatisticsRepository(database.Pool)
+	statisticsService := statisticsuc.NewService(statisticsRepository)
+	subscriptionsRepository := postgresrepo.NewSubscriptionsRepository(database.Pool)
+	subscriptionsService := subscriptionsuc.NewService(subscriptionsRepository)
+	controllerhttp.SetBillingService(billingService)
+	controllerhttp.SetAppointmentsService(appointmentsService)
+	controllerhttp.SetClientsService(clientsService)
+	controllerhttp.SetServicesService(servicesService)
+	controllerhttp.SetStatisticsService(statisticsService)
+	controllerhttp.SetSubscriptionService(subscriptionsService)
 }
 
 func getenv(key, fallback string) string {

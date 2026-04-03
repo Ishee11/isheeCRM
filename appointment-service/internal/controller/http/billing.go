@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
 	"appointment-service/internal/entity"
 	"appointment-service/internal/usecase/billing"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -217,6 +219,7 @@ func UpdatePaymentStatusMain(c *gin.Context) {
 		Amount:        appointment.Amount,
 	})
 	if err != nil {
+		fmt.Printf("UpdatePaymentStatusMain ERROR: %+v\n", err)
 		billingErrorResponse(c, err, "Запись не найдена")
 		return
 	}

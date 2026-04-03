@@ -162,6 +162,14 @@ func (s *Service) AddSubscriptionVisit(ctx context.Context, req AddSubscriptionV
 			return err
 		}
 
+		if err := s.paymentStatusUpdater.UpdateAppointmentPaymentStatus(
+        txCtx,
+        req.AppointmentID,
+        "paid",
+  ); err != nil {
+        return err
+  }
+
 		return nil
 	})
 }

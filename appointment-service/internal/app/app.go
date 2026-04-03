@@ -65,7 +65,11 @@ func Run() error {
 }
 
 func newRouter() *gin.Engine {
-	router := gin.Default()
+	router := gin.New()
+	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{
+		SkipPaths: []string{"/healthz", "/version"},
+	}))
+	router.Use(gin.Recovery())
 	router.StaticFile("/", "./test.html")
 	router.GET("/healthz", healthHandler())
 	router.HEAD("/healthz", healthHandler())

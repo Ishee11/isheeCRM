@@ -12,7 +12,7 @@ RUN go mod download
 # Копируем исходный код проекта
 COPY . .
 # Собираем бинарный файл приложения с оптимизацией размера
-RUN go build -ldflags="-s -w" -o /app/main .
+RUN go build -ldflags="-s -w" -o /app/main ./cmd/appointment-service
 
 # Шаг 2: Используем минимальный образ Alpine для запуска приложения
 FROM alpine:3.20

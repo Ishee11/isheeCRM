@@ -228,8 +228,8 @@ func (s *Service) UpdateAppointmentPaymentStatus(ctx context.Context, req Update
 	if req.PaymentStatus != "unpaid" && req.PaymentStatus != "paid" && req.PaymentStatus != "partially_paid" {
 		return fmt.Errorf("%w: unsupported payment_status", ErrInvalidInput)
 	}
-	if req.PaymentStatus == "partially_paid" && req.Amount <= 0 {
-		return fmt.Errorf("%w: amount must be positive for partially_paid", ErrInvalidInput)
+	if req.PaymentStatus == "partially_paid" && req.Amount < 0 {
+		return fmt.Errorf("%w: amount must be positive or 0 for partially_paid", ErrInvalidInput)
 	}
 
 	return s.txManager.WithinTransaction(ctx, func(txCtx context.Context) error {

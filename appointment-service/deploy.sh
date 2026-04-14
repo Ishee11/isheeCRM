@@ -33,7 +33,7 @@ fi
 
 echo "Deploying ${APP_IMAGE}:${IMAGE_TAG}"
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" pull
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d app
+docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d
 # docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d
 
 attempt=1

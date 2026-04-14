@@ -23,7 +23,8 @@ set +a
 
 # Теперь APP_PORT уже доступен
 
-HEALTHCHECK_URL="${HEALTHCHECK_URL:-[http://127.0.0.1:${APP_PORT:-8080}/healthz}](http://127.0.0.1:${APP_PORT:-8080}/healthz})"
+#HEALTHCHECK_URL="${HEALTHCHECK_URL:-[http://127.0.0.1:${APP_PORT:-8080}/healthz}](http://127.0.0.1:${APP_PORT:-8080}/healthz})"
+HEALTHCHECK_URL="http://127.0.0.1:${APP_PORT}/healthz"
 
 if [[ -z "${APP_IMAGE:-}" ]]; then
 echo "APP_IMAGE is required in ${ENV_FILE}"

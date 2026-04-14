@@ -6,7 +6,8 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${PROJECT_DIR}"
 
 ENV_FILE="${ENV_FILE:-.env}"
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose-app.yml}"
+# COMPOSE_FILE="${COMPOSE_FILE:-docker-compose-app.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
 HEALTHCHECK_URL="${HEALTHCHECK_URL:-http://127.0.0.1:${APP_PORT:-8080}/healthz}"
 HEALTHCHECK_RETRIES="${HEALTHCHECK_RETRIES:-30}"
 HEALTHCHECK_DELAY_SECONDS="${HEALTHCHECK_DELAY_SECONDS:-2}"
@@ -32,7 +33,8 @@ fi
 
 echo "Deploying ${APP_IMAGE}:${IMAGE_TAG}"
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" pull
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d
+docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d app
+# docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d
 
 attempt=1
 healthcheck_cmd() {

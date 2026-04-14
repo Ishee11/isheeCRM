@@ -89,7 +89,7 @@ jobs:
             set -euo pipefail
             echo "${REGISTRY_PASSWORD}" | docker login ghcr.io -u "${REGISTRY_USERNAME}" --password-stdin
             cd "${DEPLOY_PATH}"
-            git pull --ff-only origin main
+            
             cd appointment-service
             sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${IMAGE_REF}|" .env
             if grep -q '^IMAGE_TAG=' .env; then

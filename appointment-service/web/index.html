@@ -110,6 +110,66 @@
       </section>
 
       <section class="view" id="view-schedule" data-title="Расписание" data-eyebrow="Записи">
+        <div class="workflow-grid">
+          <section class="panel workflow-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Записать клиента</h2>
+                <p>Создать запись на услугу</p>
+              </div>
+            </div>
+            <form class="form-stack" id="appointmentForm">
+              <label>
+                <span>ID клиента</span>
+                <input name="client_id" inputmode="numeric" required placeholder="Например 12">
+              </label>
+              <label>
+                <span>Услуга</span>
+                <select name="service_id" id="appointmentServiceSelect" required>
+                  <option value="">Выберите услугу</option>
+                </select>
+              </label>
+              <label>
+                <span>Дата и время</span>
+                <input name="start_time" type="datetime-local" required>
+              </label>
+              <button class="primary-button" type="submit">Создать запись</button>
+            </form>
+          </section>
+
+          <section class="panel workflow-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Провести оплату</h2>
+                <p>Обновить оплату по записи</p>
+              </div>
+            </div>
+            <form class="form-stack" id="paymentForm">
+              <label>
+                <span>ID записи</span>
+                <input name="appointment_id" inputmode="numeric" required placeholder="appointment_id">
+              </label>
+              <label>
+                <span>ID клиента</span>
+                <input name="client_id" inputmode="numeric" required placeholder="client_id">
+              </label>
+              <label>
+                <span>Статус оплаты</span>
+                <select name="payment_status" required>
+                  <option value="paid">paid</option>
+                  <option value="partially_paid">partially_paid</option>
+                  <option value="unpaid">unpaid</option>
+                </select>
+              </label>
+              <label>
+                <span>Сумма</span>
+                <input name="amount" type="number" min="0" step="1" required placeholder="2500">
+              </label>
+              <button class="primary-button" type="submit">Провести оплату</button>
+            </form>
+          </section>
+        </div>
+
         <div class="toolbar">
           <label>
             <span>С</span>
@@ -193,6 +253,26 @@
             <div id="clientCard" class="client-card-empty">Нет данных</div>
           </section>
         </div>
+
+        <section class="panel section-gap">
+          <div class="panel-head">
+            <div>
+              <h2>Новый клиент</h2>
+              <p>Быстрое создание карточки для записи</p>
+            </div>
+          </div>
+          <form class="quick-create" id="clientForm">
+            <label>
+              <span>Имя</span>
+              <input name="name" required placeholder="Анна Иванова">
+            </label>
+            <label>
+              <span>Телефон</span>
+              <input name="phone" required placeholder="+79990000000">
+            </label>
+            <button class="primary-button" type="submit">Создать клиента</button>
+          </form>
+        </section>
       </section>
 
       <section class="view" id="view-catalog" data-title="Услуги" data-eyebrow="Каталог">
@@ -235,6 +315,62 @@
       </section>
 
       <section class="view" id="view-memberships" data-title="Абонементы" data-eyebrow="Продажи">
+        <div class="workflow-grid">
+          <section class="panel workflow-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Продать абонемент</h2>
+                <p>Оформить абонемент клиенту</p>
+              </div>
+            </div>
+            <form class="form-stack" id="sellMembershipForm">
+              <label>
+                <span>ID клиента</span>
+                <input name="client_id" inputmode="numeric" required placeholder="client_id">
+              </label>
+              <label>
+                <span>Тип абонемента</span>
+                <select name="subscription_types_id" id="sellMembershipTypeSelect" required>
+                  <option value="">Выберите тип</option>
+                </select>
+              </label>
+              <label>
+                <span>Стоимость</span>
+                <input name="cost" type="number" min="0" step="1" required placeholder="12000">
+              </label>
+              <label>
+                <span>Кол-во занятий</span>
+                <input name="sessions_count" type="number" min="1" step="1" required placeholder="8">
+              </label>
+              <button class="primary-button" type="submit">Продать</button>
+            </form>
+          </section>
+
+          <section class="panel workflow-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Списать занятие</h2>
+                <p>Оплата записи абонементом</p>
+              </div>
+            </div>
+            <form class="form-stack" id="subscriptionVisitForm">
+              <label>
+                <span>ID абонемента</span>
+                <input name="subscription_id" inputmode="numeric" required placeholder="subscription_id">
+              </label>
+              <label>
+                <span>ID записи</span>
+                <input name="appointment_id" inputmode="numeric" required placeholder="appointment_id">
+              </label>
+              <label>
+                <span>Дата визита</span>
+                <input name="visit_date" type="date" required>
+              </label>
+              <button class="primary-button" type="submit">Списать занятие</button>
+            </form>
+          </section>
+        </div>
+
         <div class="content-grid">
           <section class="panel">
             <div class="panel-head">

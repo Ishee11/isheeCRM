@@ -61,6 +61,18 @@ function formatMoney(value) {
   return money.format(number);
 }
 
+function localDateTimeToISO(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toISOString();
+}
+
+function dateToISO(value) {
+  if (!value) return "";
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? value : date.toISOString();
+}
+
 function statusClass(value) {
   const normalized = text(value, "").toLowerCase();
   if (["done", "paid", "success", "completed"].includes(normalized)) return "ok";
@@ -174,6 +186,53 @@ async function loadVisits() {
   }
 }
 
+async function createAppointment(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const body = {
+    client_id: Number(form.client_id.value),
+    service_id: Number(form.service_id.value),
+    start_time: localDateTimeToISO(form.start_time.value),
+  };
+
+  try {
+    const created = await api("/visits/", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    form.reset();
+    toast(`Запись создана: #${created.id || ""}`);
+    await loadVisits();
+    setView("schedule");
+  } catch (error) {
+    toast(`Не удалось создать запись: ${error.message}`, "error");
+  }
+}
+
+async function updatePayment(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const appointmentId = form.appointment_id.value.trim();
+  const body = {
+    client_id: Number(form.client_id.value),
+    payment_status: form.payment_status.value,
+    amount: Number(form.amount.value),
+  };
+
+  try {
+    await api(`/payments/visits/${encodeURIComponent(appointmentId)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    form.reset();
+    toast(`Оплата проведена по записи #${appointmentId}`);
+    await loadVisits();
+    await loadStatistics();
+  } catch (error) {
+    toast(`Оплата не проведена: ${error.message}`, "error");
+  }
+}
+
 function renderVisits() {
   const tbody = qs("#visitsTable");
   if (!tbody) return;
@@ -185,7 +244,7 @@ function renderVisits() {
   }
 
   tbody.innerHTML = state.visits.map((visit) => `
-    <tr>
+    <tr data-visit-id="${escapeHtml(visit.id)}" data-client-id="${escapeHtml(visit.client_id || "")}">
       <td>${escapeHtml(visit.id)}</td>
       <td>${escapeHtml(visit.client_name || visit.client_id)}</td>
       <td>${escapeHtml(visit.service_name || visit.service_id)}</td>
@@ -194,6 +253,15 @@ function renderVisits() {
       <td><span class="pill ${statusClass(visit.payment_status)}">${escapeHtml(visit.payment_status || "unknown")}</span></td>
     </tr>
   `).join("");
+
+  qsa("#visitsTable tr[data-visit-id]").forEach((row) => {
+    row.addEventListener("click", () => {
+      const paymentForm = qs("#paymentForm");
+      paymentForm.appointment_id.value = row.dataset.visitId || "";
+      paymentForm.client_id.value = row.dataset.clientId || "";
+      toast("Запись подставлена в форму оплаты");
+    });
+  });
 }
 
 function renderDashboardVisits() {
@@ -223,10 +291,22 @@ async function loadServices() {
     state.services = Array.isArray(data) ? data : data.items || [];
     renderServices();
     renderDashboardServices();
+    renderServiceOptions();
   } catch (error) {
     toast(`Услуги: ${error.message}`, "error");
     qs("#servicesGrid").innerHTML = `<div class="empty-state">Каталог недоступен</div>`;
   }
+}
+
+function renderServiceOptions() {
+  const select = qs("#appointmentServiceSelect");
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = `<option value="">Выберите услугу</option>` + state.services.map((service) => {
+    const id = service.service_id || service.id;
+    return `<option value="${escapeHtml(id)}">${escapeHtml(service.name)} · ${escapeHtml(formatMoney(service.price))}</option>`;
+  }).join("");
+  if (current) select.value = current;
 }
 
 function renderServices() {
@@ -299,6 +379,32 @@ async function createService(event) {
   }
 }
 
+async function createClient(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const body = {
+    name: form.name.value.trim(),
+    phone: form.phone.value.trim(),
+  };
+
+  try {
+    const result = await api("/clients/", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    form.reset();
+    qs("#clientPhone").value = result.phone || body.phone;
+    qs("#clientId").value = result.client_id || "";
+    qs("#appointmentForm").client_id.value = result.client_id || "";
+    qs("#sellMembershipForm").client_id.value = result.client_id || "";
+    qs("#membershipClientId").value = result.client_id || "";
+    toast(`Клиент создан: #${result.client_id}`);
+    if (result.client_id) await loadClient(result.client_id);
+  } catch (error) {
+    toast(`Клиент не создан: ${error.message}`, "error");
+  }
+}
+
 async function findClient() {
   const phone = qs("#clientPhone").value.trim();
   if (!phone) {
@@ -355,10 +461,22 @@ async function loadMembershipTypes() {
     const data = await api("/subscriptions/types");
     state.membershipTypes = Array.isArray(data) ? data : data.items || [];
     renderMembershipTypes();
+    renderMembershipOptions();
   } catch (error) {
     toast(`Абонементы: ${error.message}`, "error");
     if (target) target.innerHTML = `<div class="empty-state">Каталог недоступен</div>`;
   }
+}
+
+function renderMembershipOptions() {
+  const select = qs("#sellMembershipTypeSelect");
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = `<option value="">Выберите тип</option>` + state.membershipTypes.map((item) => {
+    const id = item.subscription_types_id || item.id;
+    return `<option value="${escapeHtml(id)}">${escapeHtml(item.name)} · ${escapeHtml(item.sessions_count)} занятий</option>`;
+  }).join("");
+  if (current) select.value = current;
 }
 
 function renderMembershipTypes() {
@@ -415,13 +533,77 @@ async function loadClientMemberships() {
   }
 }
 
+async function sellMembership(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const body = {
+    client_id: Number(form.client_id.value),
+    subscription_types_id: Number(form.subscription_types_id.value),
+    cost: Number(form.cost.value),
+    sessions_count: Number(form.sessions_count.value),
+  };
+
+  try {
+    await api("/subscriptions/sell", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    qs("#membershipClientId").value = String(body.client_id);
+    form.reset();
+    toast("Абонемент продан");
+    await loadClientMemberships();
+    await loadStatistics();
+  } catch (error) {
+    toast(`Абонемент не продан: ${error.message}`, "error");
+  }
+}
+
+async function addSubscriptionVisit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const body = {
+    subscription_id: Number(form.subscription_id.value),
+    appointment_id: Number(form.appointment_id.value),
+    visit_date: dateToISO(form.visit_date.value),
+  };
+
+  try {
+    await api("/payments/subscription", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    form.reset();
+    toast("Занятие списано по абонементу");
+    await loadVisits();
+  } catch (error) {
+    toast(`Списание не выполнено: ${error.message}`, "error");
+  }
+}
+
+function fillMembershipSaleFields() {
+  const select = qs("#sellMembershipTypeSelect");
+  const form = qs("#sellMembershipForm");
+  if (!select || !form) return;
+  const item = state.membershipTypes.find((membership) => {
+    const id = String(membership.subscription_types_id || membership.id);
+    return id === select.value;
+  });
+  if (!item) return;
+  form.cost.value = item.cost || "";
+  form.sessions_count.value = item.sessions_count || "";
+}
+
 function refreshCurrentView() {
   if (state.view === "dashboard") {
     loadStatistics();
     loadVisits();
     loadServices();
+    loadMembershipTypes();
   }
-  if (state.view === "schedule") loadVisits();
+  if (state.view === "schedule") {
+    loadVisits();
+    loadServices();
+  }
   if (state.view === "catalog") loadServices();
   if (state.view === "memberships") loadMembershipTypes();
 }
@@ -435,12 +617,18 @@ function bindEvents() {
   });
   qs("#refreshButton").addEventListener("click", refreshCurrentView);
   qs("#loadVisitsButton").addEventListener("click", loadVisits);
+  qs("#appointmentForm").addEventListener("submit", createAppointment);
+  qs("#paymentForm").addEventListener("submit", updatePayment);
   qs("#reloadServicesButton").addEventListener("click", loadServices);
   qs("#serviceForm").addEventListener("submit", createService);
+  qs("#clientForm").addEventListener("submit", createClient);
   qs("#findClientButton").addEventListener("click", findClient);
   qs("#loadClientButton").addEventListener("click", () => loadClient());
   qs("#reloadMembershipsButton").addEventListener("click", loadMembershipTypes);
   qs("#loadMembershipClientButton").addEventListener("click", loadClientMemberships);
+  qs("#sellMembershipForm").addEventListener("submit", sellMembership);
+  qs("#subscriptionVisitForm").addEventListener("submit", addSubscriptionVisit);
+  qs("#sellMembershipTypeSelect").addEventListener("change", fillMembershipSaleFields);
 }
 
 function initDates() {
@@ -451,6 +639,11 @@ function initDates() {
   end.setDate(now.getDate() + 14);
   qs("#visitFrom").value = start.toISOString().slice(0, 10);
   qs("#visitTo").value = end.toISOString().slice(0, 10);
+  const appointmentDate = new Date(now);
+  appointmentDate.setMinutes(0, 0, 0);
+  appointmentDate.setHours(appointmentDate.getHours() + 1);
+  qs("#appointmentForm").start_time.value = appointmentDate.toISOString().slice(0, 16);
+  qs("#subscriptionVisitForm").visit_date.value = now.toISOString().slice(0, 10);
 }
 
 function init() {

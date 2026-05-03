@@ -331,9 +331,25 @@ label span {
 .toolbar,
 .split-form,
 .inline-form,
-.form-stack {
+.form-stack,
+.quick-create {
   display: grid;
   gap: 12px;
+}
+
+.workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.workflow-panel {
+  border-top: 4px solid var(--accent);
+}
+
+.section-gap {
+  margin-top: 18px;
 }
 
 .toolbar {
@@ -354,6 +370,11 @@ label span {
 .inline-form {
   grid-template-columns: minmax(0, 1fr) auto;
   margin-bottom: 16px;
+}
+
+.quick-create {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
 }
 
 .form-stack {
@@ -577,7 +598,8 @@ td {
 
   .metric-grid,
   .content-grid,
-  .catalog-grid {
+  .catalog-grid,
+  .workflow-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -628,9 +650,11 @@ td {
   .metric-grid,
   .content-grid,
   .catalog-grid,
+  .workflow-grid,
   .toolbar,
   .split-form,
-  .inline-form {
+  .inline-form,
+  .quick-create {
     grid-template-columns: 1fr;
   }
 

@@ -168,8 +168,9 @@ async function loadStatistics() {
 }
 
 function scheduleQuery() {
-  const params = new URLSearchParams();
-  const selected = qs("#scheduleDate").value;
+	const params = new URLSearchParams();
+	params.set("format", "list");
+	const selected = qs("#scheduleDate").value;
   const status = qs("#visitStatus").value;
 
   if (state.range === "today" && selected) {
@@ -195,7 +196,7 @@ async function loadVisits() {
 
   try {
     const query = scheduleQuery();
-    const data = await api(`/visits/${query ? `?${query}` : ""}`);
+    const data = await api(`/visits/?${query}`);
     state.visits = (Array.isArray(data) ? data : data.items || []).sort((a, b) => {
       return new Date(a.start_time || 0) - new Date(b.start_time || 0);
     });
@@ -362,7 +363,7 @@ async function addSubscriptionVisitFromContext(event) {
 
 async function loadServices() {
   try {
-    const data = await api("/services/");
+    const data = await api("/services/?format=list");
     state.services = Array.isArray(data) ? data : data.items || [];
     renderServices();
     renderServiceOptions();
@@ -550,7 +551,7 @@ async function openClientFromVisit(visit) {
 
 async function loadMembershipTypes() {
   try {
-    const data = await api("/subscriptions/types");
+    const data = await api("/subscriptions/types?format=list");
     state.membershipTypes = Array.isArray(data) ? data : data.items || [];
     renderMembershipOptions();
   } catch (error) {

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"github.com/Ishee11/isheeCRM/appointment-service/internal/entity"
 	"github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/services"
 	"net/http"
@@ -59,13 +60,25 @@ func GetServices(c *gin.Context) {
 	}
 
 	result := make([]entity.Service, 0, len(list))
+	legacyResult := make(map[string]entity.Service, len(list))
 	for _, service := range list {
-		result = append(result, entity.Service{
+		item := entity.Service{
 			ID:       service.ID,
 			Name:     service.Name,
 			Duration: service.Duration,
 			Price:    service.Price,
-		})
+		}
+		result = append(result, item)
+		key := service.Name
+		if service.Duration > 0 && service.Price > 0 {
+			key = fmt.Sprintf("%s - %d мин. %.0f руб.", service.Name, service.Duration, service.Price)
+		}
+		legacyResult[key] = item
+	}
+
+	if c.Query("format") != "list" {
+		c.JSON(http.StatusOK, legacyResult)
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{

@@ -141,14 +141,22 @@ func GetSubscriptionTypes(c *gin.Context) {
 	}
 
 	subscriptionTypes := make([]entity.SubscriptionType, 0, len(types))
+	legacyTypes := make(map[string]entity.SubscriptionType, len(types))
 	for _, subscriptionType := range types {
-		subscriptionTypes = append(subscriptionTypes, entity.SubscriptionType{
+		item := entity.SubscriptionType{
 			ID:            subscriptionType.ID,
 			Name:          subscriptionType.Name,
 			Cost:          subscriptionType.Cost,
 			SessionsCount: subscriptionType.SessionsCount,
 			ServiceIDs:    subscriptionType.ServiceIDs,
-		})
+		}
+		subscriptionTypes = append(subscriptionTypes, item)
+		legacyTypes[subscriptionType.Name] = item
+	}
+
+	if c.Query("format") != "list" {
+		c.JSON(http.StatusOK, legacyTypes)
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"github.com/Ishee11/isheeCRM/appointment-service/internal/entity"
 	appointmentsuc "github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/appointments"
 	"net/http"
@@ -112,8 +113,9 @@ func (h *AppointmentsHandler) GetVisits(c *gin.Context) {
 		return
 	}
 	result := make([]entity.Appointment, 0, len(list))
+	legacyResult := make(map[string]entity.Appointment, len(list))
 	for _, a := range list {
-		result = append(result, entity.Appointment{
+		item := entity.Appointment{
 			ID:                uint(a.ID),
 			ServiceID:         entity.IntString(a.ServiceID),
 			ClientID:          entity.IntString(a.ClientID),
@@ -122,8 +124,22 @@ func (h *AppointmentsHandler) GetVisits(c *gin.Context) {
 			AppointmentStatus: a.AppointmentStatus,
 			ServiceName:       a.ServiceName,
 			ClientName:        a.ClientName,
-		})
+		}
+		result = append(result, item)
+		key := fmt.Sprintf("%s в %s %s %s",
+			a.StartTime.Format("2006.01.02"),
+			a.StartTime.Format("15:04"),
+			a.ServiceName,
+			a.ClientName,
+		)
+		legacyResult[key] = item
 	}
+
+	if c.Query("format") != "list" {
+		c.JSON(http.StatusOK, legacyResult)
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"items": result,
 		"total": len(result),

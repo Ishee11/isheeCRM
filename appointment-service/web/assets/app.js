@@ -77,9 +77,32 @@ function appointmentHour(value) {
   return date.getHours();
 }
 
+function toDateInputValue(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 function toDateTimeInputValue(date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 16);
+}
+
+function formatTimezoneOffset(minutes) {
+  const sign = minutes >= 0 ? "+" : "-";
+  const absolute = Math.abs(minutes);
+  const hours = Math.floor(absolute / 60);
+  const rest = absolute % 60;
+  return rest ? `${sign}${hours}:${String(rest).padStart(2, "0")}` : `${sign}${hours}`;
+}
+
+function currentTimezoneLabel() {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "локальный часовой пояс";
+  const utcOffsetMinutes = -new Date().getTimezoneOffset();
+  const moscowOffsetMinutes = utcOffsetMinutes - 180;
+  return `${timezone}, UTC${formatTimezoneOffset(utcOffsetMinutes)} / МСК${formatTimezoneOffset(moscowOffsetMinutes)}`;
 }
 
 function formatMoney(value) {
@@ -193,8 +216,8 @@ function scheduleQuery() {
     const from = new Date(`${selected}T00:00:00`);
     const to = new Date(from);
     to.setDate(from.getDate() + 6);
-    params.set("from", from.toISOString().slice(0, 10));
-    params.set("to", to.toISOString().slice(0, 10));
+    params.set("from", toDateInputValue(from));
+    params.set("to", toDateInputValue(to));
   }
 
   if (status) params.set("status", status);
@@ -773,7 +796,7 @@ async function createAppointment(event) {
 function openAppointmentDialog(hour) {
   loadServices();
   const form = qs("#appointmentForm");
-  const selectedDate = qs("#scheduleDate").value || new Date().toISOString().slice(0, 10);
+  const selectedDate = qs("#scheduleDate").value || toDateInputValue(new Date());
   const date = new Date(`${selectedDate}T00:00:00`);
   const targetHour = Number.isFinite(hour) ? hour : new Date().getHours() + 1;
   date.setHours(targetHour, 0, 0, 0);
@@ -836,12 +859,19 @@ function bindEvents() {
 
 function initDates() {
   const now = new Date();
-  qs("#scheduleDate").value = now.toISOString().slice(0, 10);
+  qs("#scheduleDate").value = toDateInputValue(now);
+}
+
+function initTimezoneLabels() {
+  const label = `Время: ${currentTimezoneLabel()}`;
+  qs("#timezoneLabel").textContent = label;
+  qs("#appointmentTimezoneLabel").textContent = label;
 }
 
 function init() {
   bindEvents();
   initDates();
+  initTimezoneLabels();
   checkVersion();
   loadServices();
   loadMembershipTypes();

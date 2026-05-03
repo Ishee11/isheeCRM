@@ -291,7 +291,7 @@ h3 {
 
 .day-tools {
   display: grid;
-  grid-template-columns: auto minmax(180px, 240px) minmax(160px, 220px);
+  grid-template-columns: auto minmax(180px, 240px) minmax(160px, 220px) minmax(220px, 1fr);
   align-items: end;
   gap: 12px;
   margin-bottom: 18px;
@@ -590,6 +590,24 @@ label span {
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+label small,
+.timezone-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.timezone-note {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font-weight: 750;
 }
 
 input,

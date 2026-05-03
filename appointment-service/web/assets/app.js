@@ -251,7 +251,7 @@ function renderVisits() {
   qs("#visitsCaption").textContent = `${state.visits.length} записей`;
   renderJournalTotals();
 
-  const hours = Array.from({ length: 14 }, (_, index) => index + 8);
+  const hours = journalHours();
   timeline.innerHTML = `
     <div class="journal-grid">
       <div class="journal-head journal-time-head">Время</div>
@@ -266,6 +266,17 @@ function renderVisits() {
   qsa("[data-slot-hour]").forEach((item) => {
     item.addEventListener("click", () => openAppointmentDialog(Number(item.dataset.slotHour)));
   });
+}
+
+function journalHours() {
+  const businessStart = 8;
+  const businessEnd = 21;
+  const visitHours = state.visits
+    .map((visit) => appointmentHour(visit.start_time))
+    .filter((hour) => hour >= 0 && hour <= 23);
+  const start = Math.min(businessStart, ...visitHours);
+  const end = Math.max(businessEnd, ...visitHours);
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index);
 }
 
 function renderJournalTotals() {

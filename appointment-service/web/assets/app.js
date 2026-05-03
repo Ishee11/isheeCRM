@@ -59,22 +59,37 @@ function escapeHtml(value) {
 
 function formatDate(value) {
   if (!value) return "-";
-  const date = new Date(value);
+  const date = appointmentDate(value);
   if (Number.isNaN(date.getTime())) return text(value);
   return dateTime.format(date);
 }
 
 function formatTime(value) {
   if (!value) return "-";
-  const date = new Date(value);
+  const date = appointmentDate(value);
   if (Number.isNaN(date.getTime())) return "-";
   return timeOnly.format(date);
 }
 
 function appointmentHour(value) {
-  const date = new Date(value);
+  const date = appointmentDate(value);
   if (Number.isNaN(date.getTime())) return 9;
   return date.getHours();
+}
+
+function appointmentDate(value) {
+  const source = text(value, "");
+  const match = source.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return new Date(value);
+  const [, year, month, day, hour, minute, second = "0"] = match;
+  return new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+  );
 }
 
 function toDateInputValue(date) {
@@ -111,8 +126,7 @@ function formatMoney(value) {
 
 function localDateTimeToISO(value) {
   if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toISOString();
+  return value.length === 16 ? `${value}:00Z` : `${value}Z`;
 }
 
 function dateToISO(value) {
@@ -232,7 +246,7 @@ async function loadVisits() {
     const query = scheduleQuery();
     const data = await api(`/visits/?${query}`);
     state.visits = (Array.isArray(data) ? data : data.items || []).sort((a, b) => {
-      return new Date(a.start_time || 0) - new Date(b.start_time || 0);
+      return appointmentDate(a.start_time || 0) - appointmentDate(b.start_time || 0);
     });
     renderVisits();
     if (state.selectedVisit) {

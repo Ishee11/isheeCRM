@@ -8,32 +8,32 @@
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar" aria-label="Main navigation">
-      <a class="brand" href="#dashboard" aria-label="isheeCRM">
+    <aside class="sidebar" aria-label="Навигация">
+      <a class="brand" href="#schedule" aria-label="isheeCRM">
         <span class="brand-mark">i</span>
         <span class="brand-text">isheeCRM</span>
       </a>
 
-      <nav class="nav-list" aria-label="Sections">
-        <button class="nav-item active" data-view="dashboard" type="button">
-          <span class="nav-icon">D</span>
-          <span>Обзор</span>
-        </button>
-        <button class="nav-item" data-view="schedule" type="button">
-          <span class="nav-icon">S</span>
+      <nav class="nav-list" aria-label="Разделы">
+        <button class="nav-item active" data-view="schedule" type="button">
+          <span class="nav-icon">01</span>
           <span>Расписание</span>
         </button>
         <button class="nav-item" data-view="clients" type="button">
-          <span class="nav-icon">C</span>
+          <span class="nav-icon">02</span>
           <span>Клиенты</span>
         </button>
-        <button class="nav-item" data-view="catalog" type="button">
-          <span class="nav-icon">P</span>
+        <button class="nav-item" data-view="sales" type="button">
+          <span class="nav-icon">03</span>
+          <span>Продажи</span>
+        </button>
+        <button class="nav-item" data-view="services" type="button">
+          <span class="nav-icon">04</span>
           <span>Услуги</span>
         </button>
-        <button class="nav-item" data-view="memberships" type="button">
-          <span class="nav-icon">M</span>
-          <span>Абонементы</span>
+        <button class="nav-item" data-view="reports" type="button">
+          <span class="nav-icon">05</span>
+          <span>Статистика</span>
         </button>
       </nav>
 
@@ -49,18 +49,195 @@
     <main class="workspace">
       <header class="topbar">
         <div>
-          <p class="eyebrow" id="currentEyebrow">CRM</p>
-          <h1 id="currentTitle">Обзор</h1>
+          <p class="eyebrow" id="currentEyebrow">Рабочий день</p>
+          <h1 id="currentTitle">Расписание</h1>
         </div>
         <div class="topbar-actions">
-          <button class="icon-button" id="refreshButton" type="button" title="Обновить">
-            <span>R</span>
-          </button>
-          <a class="ghost-button" href="/healthz" target="_blank" rel="noreferrer">Health</a>
+          <button class="ghost-button" id="refreshButton" type="button">Обновить</button>
+          <button class="secondary-button" id="openClientButton" type="button">Новый клиент</button>
+          <button class="primary-button" id="openAppointmentButton" type="button">Новая запись</button>
         </div>
       </header>
 
-      <section class="view active" id="view-dashboard" data-title="Обзор" data-eyebrow="CRM">
+      <section class="view active" id="view-schedule">
+        <div class="day-tools">
+          <div class="segmented">
+            <button class="active" type="button" data-range="today">Сегодня</button>
+            <button type="button" data-range="week">Неделя</button>
+            <button type="button" data-range="all">Все</button>
+          </div>
+          <label>
+            <span>Дата</span>
+            <input id="scheduleDate" type="date">
+          </label>
+          <label>
+            <span>Статус</span>
+            <select id="visitStatus">
+              <option value="">Все</option>
+              <option value="scheduled">scheduled</option>
+              <option value="done">done</option>
+              <option value="cancelled">cancelled</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="schedule-layout">
+          <section class="panel schedule-board">
+            <div class="panel-head">
+              <div>
+                <h2>Записи</h2>
+                <p id="visitsCaption">Загрузка расписания</p>
+              </div>
+            </div>
+            <div class="timeline" id="visitTimeline"></div>
+          </section>
+
+          <aside class="panel context-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Детали записи</h2>
+                <p id="appointmentContextCaption">Выберите запись в расписании</p>
+              </div>
+            </div>
+            <div id="appointmentContext" class="empty-state">Запись не выбрана</div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view" id="view-clients">
+        <div class="client-layout">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Поиск клиента</h2>
+                <p>Основной способ работы - телефон клиента</p>
+              </div>
+            </div>
+            <form class="inline-form" id="clientSearchForm">
+              <input id="clientPhone" placeholder="+79990000000">
+              <button class="primary-button" type="submit">Найти</button>
+            </form>
+
+            <div class="divider"></div>
+
+            <div class="panel-head compact-head">
+              <div>
+                <h2>Новый клиент</h2>
+                <p>После создания клиент будет выбран для записи</p>
+              </div>
+            </div>
+            <form class="form-stack" id="clientForm">
+              <label>
+                <span>Имя</span>
+                <input name="name" required placeholder="Анна Иванова">
+              </label>
+              <label>
+                <span>Телефон</span>
+                <input name="phone" required placeholder="+79990000000">
+              </label>
+              <button class="primary-button" type="submit">Создать клиента</button>
+            </form>
+          </section>
+
+          <section class="panel client-card-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Карточка клиента</h2>
+                <p id="clientCardCaption">Клиент не выбран</p>
+              </div>
+              <button class="text-button" id="clientBookButton" type="button">Записать</button>
+            </div>
+            <div id="clientCard" class="empty-state">Найдите или создайте клиента</div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="view-sales">
+        <div class="sales-layout">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Продажа абонемента</h2>
+                <p id="saleClientCaption">Выберите клиента через поиск или карточку</p>
+              </div>
+            </div>
+            <form class="form-stack" id="sellMembershipForm">
+              <label>
+                <span>Клиент</span>
+                <input name="client_label" disabled placeholder="Клиент не выбран">
+              </label>
+              <input name="client_id" type="hidden">
+              <label>
+                <span>Тип абонемента</span>
+                <select name="subscription_types_id" id="sellMembershipTypeSelect" required>
+                  <option value="">Выберите тип</option>
+                </select>
+              </label>
+              <div class="two-col">
+                <label>
+                  <span>Стоимость</span>
+                  <input name="cost" type="number" min="0" step="1" required placeholder="12000">
+                </label>
+                <label>
+                  <span>Занятий</span>
+                  <input name="sessions_count" type="number" min="1" step="1" required placeholder="8">
+                </label>
+              </div>
+              <button class="primary-button" type="submit">Продать абонемент</button>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Абонементы клиента</h2>
+                <p>Остатки занятий и номера абонементов</p>
+              </div>
+            </div>
+            <div id="clientMemberships" class="stack-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="view-services">
+        <div class="catalog-layout">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Каталог услуг</h2>
+                <p id="servicesCaption">Загрузка каталога</p>
+              </div>
+            </div>
+            <div id="servicesGrid" class="service-grid"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Новая услуга</h2>
+                <p>Название, длительность и цена</p>
+              </div>
+            </div>
+            <form class="form-stack" id="serviceForm">
+              <label>
+                <span>Название</span>
+                <input name="name" required placeholder="Персональная тренировка">
+              </label>
+              <label>
+                <span>Длительность, мин</span>
+                <input name="duration" required type="number" min="1" placeholder="60">
+              </label>
+              <label>
+                <span>Цена</span>
+                <input name="price" required type="number" min="0" step="0.01" placeholder="2500">
+              </label>
+              <button class="primary-button" type="submit">Добавить услугу</button>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="view-reports">
         <div class="metric-grid">
           <article class="metric-card">
             <span class="metric-label">Визиты</span>
@@ -83,323 +260,56 @@
             <small>продажи за месяц</small>
           </article>
         </div>
-
-        <div class="content-grid">
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Ближайшие записи</h2>
-                <p>Список из текущего расписания</p>
-              </div>
-              <button class="text-button" data-view-jump="schedule" type="button">Открыть</button>
-            </div>
-            <div id="dashboardVisits" class="stack-list"></div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Каталог</h2>
-                <p>Услуги и цены</p>
-              </div>
-              <button class="text-button" data-view-jump="catalog" type="button">Открыть</button>
-            </div>
-            <div id="dashboardServices" class="compact-list"></div>
-          </section>
-        </div>
-      </section>
-
-      <section class="view" id="view-schedule" data-title="Расписание" data-eyebrow="Записи">
-        <div class="workflow-grid">
-          <section class="panel workflow-panel">
-            <div class="panel-head">
-              <div>
-                <h2>Записать клиента</h2>
-                <p>Создать запись на услугу</p>
-              </div>
-            </div>
-            <form class="form-stack" id="appointmentForm">
-              <label>
-                <span>ID клиента</span>
-                <input name="client_id" inputmode="numeric" required placeholder="Например 12">
-              </label>
-              <label>
-                <span>Услуга</span>
-                <select name="service_id" id="appointmentServiceSelect" required>
-                  <option value="">Выберите услугу</option>
-                </select>
-              </label>
-              <label>
-                <span>Дата и время</span>
-                <input name="start_time" type="datetime-local" required>
-              </label>
-              <button class="primary-button" type="submit">Создать запись</button>
-            </form>
-          </section>
-
-          <section class="panel workflow-panel">
-            <div class="panel-head">
-              <div>
-                <h2>Провести оплату</h2>
-                <p>Обновить оплату по записи</p>
-              </div>
-            </div>
-            <form class="form-stack" id="paymentForm">
-              <label>
-                <span>ID записи</span>
-                <input name="appointment_id" inputmode="numeric" required placeholder="appointment_id">
-              </label>
-              <label>
-                <span>ID клиента</span>
-                <input name="client_id" inputmode="numeric" required placeholder="client_id">
-              </label>
-              <label>
-                <span>Статус оплаты</span>
-                <select name="payment_status" required>
-                  <option value="paid">paid</option>
-                  <option value="partially_paid">partially_paid</option>
-                  <option value="unpaid">unpaid</option>
-                </select>
-              </label>
-              <label>
-                <span>Сумма</span>
-                <input name="amount" type="number" min="0" step="1" required placeholder="2500">
-              </label>
-              <button class="primary-button" type="submit">Провести оплату</button>
-            </form>
-          </section>
-        </div>
-
-        <div class="toolbar">
-          <label>
-            <span>С</span>
-            <input id="visitFrom" type="date">
-          </label>
-          <label>
-            <span>По</span>
-            <input id="visitTo" type="date">
-          </label>
-          <label>
-            <span>Статус</span>
-            <select id="visitStatus">
-              <option value="">Все</option>
-              <option value="scheduled">scheduled</option>
-              <option value="done">done</option>
-              <option value="cancelled">cancelled</option>
-            </select>
-          </label>
-          <label>
-            <span>Клиент</span>
-            <input id="visitClientId" inputmode="numeric" placeholder="ID">
-          </label>
-          <button class="primary-button" id="loadVisitsButton" type="button">Показать</button>
-        </div>
-
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>Записи</h2>
-              <p id="visitsCaption">Фильтры не применены</p>
-            </div>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Клиент</th>
-                  <th>Услуга</th>
-                  <th>Время</th>
-                  <th>Статус</th>
-                  <th>Оплата</th>
-                </tr>
-              </thead>
-              <tbody id="visitsTable"></tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-
-      <section class="view" id="view-clients" data-title="Клиенты" data-eyebrow="Карточки">
-        <div class="content-grid">
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Поиск клиента</h2>
-                <p>Телефон или ID клиента</p>
-              </div>
-            </div>
-            <div class="split-form">
-              <label>
-                <span>Телефон</span>
-                <input id="clientPhone" placeholder="+7...">
-              </label>
-              <button class="primary-button" id="findClientButton" type="button">Найти</button>
-              <label>
-                <span>ID клиента</span>
-                <input id="clientId" inputmode="numeric" placeholder="Например 12">
-              </label>
-              <button class="secondary-button" id="loadClientButton" type="button">Открыть</button>
-            </div>
-          </section>
-
-          <section class="panel client-card-panel">
-            <div class="panel-head">
-              <div>
-                <h2>Карточка</h2>
-                <p id="clientCardCaption">Клиент не выбран</p>
-              </div>
-            </div>
-            <div id="clientCard" class="client-card-empty">Нет данных</div>
-          </section>
-        </div>
-
-        <section class="panel section-gap">
-          <div class="panel-head">
-            <div>
-              <h2>Новый клиент</h2>
-              <p>Быстрое создание карточки для записи</p>
-            </div>
-          </div>
-          <form class="quick-create" id="clientForm">
-            <label>
-              <span>Имя</span>
-              <input name="name" required placeholder="Анна Иванова">
-            </label>
-            <label>
-              <span>Телефон</span>
-              <input name="phone" required placeholder="+79990000000">
-            </label>
-            <button class="primary-button" type="submit">Создать клиента</button>
-          </form>
-        </section>
-      </section>
-
-      <section class="view" id="view-catalog" data-title="Услуги" data-eyebrow="Каталог">
-        <div class="content-grid catalog-grid">
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Список услуг</h2>
-                <p id="servicesCaption">Каталог не загружен</p>
-              </div>
-              <button class="text-button" id="reloadServicesButton" type="button">Обновить</button>
-            </div>
-            <div id="servicesGrid" class="service-grid"></div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Новая услуга</h2>
-                <p>Добавление в каталог</p>
-              </div>
-            </div>
-            <form class="form-stack" id="serviceForm">
-              <label>
-                <span>Название</span>
-                <input name="name" required placeholder="Персональная тренировка">
-              </label>
-              <label>
-                <span>Длительность, мин</span>
-                <input name="duration" required type="number" min="1" placeholder="60">
-              </label>
-              <label>
-                <span>Цена</span>
-                <input name="price" required type="number" min="0" step="0.01" placeholder="2500">
-              </label>
-              <button class="primary-button" type="submit">Добавить</button>
-            </form>
-          </section>
-        </div>
-      </section>
-
-      <section class="view" id="view-memberships" data-title="Абонементы" data-eyebrow="Продажи">
-        <div class="workflow-grid">
-          <section class="panel workflow-panel">
-            <div class="panel-head">
-              <div>
-                <h2>Продать абонемент</h2>
-                <p>Оформить абонемент клиенту</p>
-              </div>
-            </div>
-            <form class="form-stack" id="sellMembershipForm">
-              <label>
-                <span>ID клиента</span>
-                <input name="client_id" inputmode="numeric" required placeholder="client_id">
-              </label>
-              <label>
-                <span>Тип абонемента</span>
-                <select name="subscription_types_id" id="sellMembershipTypeSelect" required>
-                  <option value="">Выберите тип</option>
-                </select>
-              </label>
-              <label>
-                <span>Стоимость</span>
-                <input name="cost" type="number" min="0" step="1" required placeholder="12000">
-              </label>
-              <label>
-                <span>Кол-во занятий</span>
-                <input name="sessions_count" type="number" min="1" step="1" required placeholder="8">
-              </label>
-              <button class="primary-button" type="submit">Продать</button>
-            </form>
-          </section>
-
-          <section class="panel workflow-panel">
-            <div class="panel-head">
-              <div>
-                <h2>Списать занятие</h2>
-                <p>Оплата записи абонементом</p>
-              </div>
-            </div>
-            <form class="form-stack" id="subscriptionVisitForm">
-              <label>
-                <span>ID абонемента</span>
-                <input name="subscription_id" inputmode="numeric" required placeholder="subscription_id">
-              </label>
-              <label>
-                <span>ID записи</span>
-                <input name="appointment_id" inputmode="numeric" required placeholder="appointment_id">
-              </label>
-              <label>
-                <span>Дата визита</span>
-                <input name="visit_date" type="date" required>
-              </label>
-              <button class="primary-button" type="submit">Списать занятие</button>
-            </form>
-          </section>
-        </div>
-
-        <div class="content-grid">
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Типы абонементов</h2>
-                <p id="membershipCaption">Загрузка каталога</p>
-              </div>
-              <button class="text-button" id="reloadMembershipsButton" type="button">Обновить</button>
-            </div>
-            <div id="membershipTypes" class="membership-grid"></div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Абонементы клиента</h2>
-                <p>Поиск по ID клиента</p>
-              </div>
-            </div>
-            <div class="inline-form">
-              <input id="membershipClientId" inputmode="numeric" placeholder="client_id">
-              <button class="primary-button" id="loadMembershipClientButton" type="button">Показать</button>
-            </div>
-            <div id="clientMemberships" class="stack-list"></div>
-          </section>
-        </div>
       </section>
     </main>
   </div>
+
+  <dialog class="drawer" id="appointmentDialog">
+    <form method="dialog" class="drawer-frame">
+      <header class="drawer-head">
+        <div>
+          <p class="eyebrow">Новая запись</p>
+          <h2>Записать клиента</h2>
+        </div>
+        <button class="icon-button" value="close" type="submit">X</button>
+      </header>
+    </form>
+    <div class="drawer-body">
+      <section class="drawer-section">
+        <h3>Клиент</h3>
+        <form class="inline-form" id="appointmentClientSearchForm">
+          <input id="appointmentClientPhone" placeholder="+79990000000">
+          <button class="secondary-button" type="submit">Найти</button>
+        </form>
+        <form class="form-stack subtle-box" id="appointmentClientCreateForm">
+          <div class="two-col">
+            <input name="name" placeholder="Имя клиента">
+            <input name="phone" placeholder="+79990000000">
+          </div>
+          <button class="text-button" type="submit">Создать нового клиента</button>
+        </form>
+        <div id="selectedClientBox" class="selected-box">Клиент не выбран</div>
+      </section>
+
+      <section class="drawer-section">
+        <h3>Запись</h3>
+        <form class="form-stack" id="appointmentForm">
+          <input name="client_id" type="hidden">
+          <label>
+            <span>Услуга</span>
+            <select name="service_id" id="appointmentServiceSelect" required>
+              <option value="">Выберите услугу</option>
+            </select>
+          </label>
+          <label>
+            <span>Дата и время</span>
+            <input name="start_time" type="datetime-local" required>
+          </label>
+          <button class="primary-button" type="submit">Записать</button>
+        </form>
+      </section>
+    </div>
+  </dialog>
 
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
   <script src="/assets/app.js" defer></script>

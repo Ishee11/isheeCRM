@@ -1,16 +1,19 @@
 const state = {
-  view: "dashboard",
+  view: "schedule",
+  range: "today",
   visits: [],
   services: [],
   membershipTypes: [],
+  selectedVisit: null,
+  selectedClient: null,
 };
 
 const titles = {
-  dashboard: ["CRM", "Обзор"],
-  schedule: ["Записи", "Расписание"],
+  schedule: ["Рабочий день", "Расписание"],
   clients: ["Карточки", "Клиенты"],
-  catalog: ["Каталог", "Услуги"],
-  memberships: ["Продажи", "Абонементы"],
+  sales: ["Абонементы", "Продажи"],
+  services: ["Каталог", "Услуги"],
+  reports: ["Показатели", "Статистика"],
 };
 
 const money = new Intl.NumberFormat("ru-RU", {
@@ -22,6 +25,11 @@ const money = new Intl.NumberFormat("ru-RU", {
 const dateTime = new Intl.DateTimeFormat("ru-RU", {
   day: "2-digit",
   month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+const timeOnly = new Intl.DateTimeFormat("ru-RU", {
   hour: "2-digit",
   minute: "2-digit",
 });
@@ -56,9 +64,15 @@ function formatDate(value) {
   return dateTime.format(date);
 }
 
+function formatTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return timeOnly.format(date);
+}
+
 function formatMoney(value) {
-  const number = Number(value || 0);
-  return money.format(number);
+  return money.format(Number(value || 0));
 }
 
 function localDateTimeToISO(value) {
@@ -117,7 +131,7 @@ function setView(view) {
   state.view = view;
   qsa(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
   qsa(".view").forEach((item) => item.classList.toggle("active", item.id === `view-${view}`));
-  const [eyebrow, title] = titles[view] || titles.dashboard;
+  const [eyebrow, title] = titles[view] || titles.schedule;
   qs("#currentEyebrow").textContent = eyebrow;
   qs("#currentTitle").textContent = title;
   window.location.hash = view;
@@ -153,79 +167,169 @@ async function loadStatistics() {
   }
 }
 
-function visitQuery() {
+function scheduleQuery() {
   const params = new URLSearchParams();
-  const from = qs("#visitFrom").value;
-  const to = qs("#visitTo").value;
+  const selected = qs("#scheduleDate").value;
   const status = qs("#visitStatus").value;
-  const clientId = qs("#visitClientId").value.trim();
-  if (from) params.set("from", from);
-  if (to) params.set("to", to);
+
+  if (state.range === "today" && selected) {
+    params.set("from", selected);
+    params.set("to", selected);
+  }
+
+  if (state.range === "week" && selected) {
+    const from = new Date(`${selected}T00:00:00`);
+    const to = new Date(from);
+    to.setDate(from.getDate() + 6);
+    params.set("from", from.toISOString().slice(0, 10));
+    params.set("to", to.toISOString().slice(0, 10));
+  }
+
   if (status) params.set("status", status);
-  if (clientId) params.set("client_id", clientId);
   return params.toString();
 }
 
 async function loadVisits() {
-  const tbody = qs("#visitsTable");
-  if (tbody) {
-    tbody.innerHTML = `<tr><td colspan="6">Загрузка...</td></tr>`;
-  }
+  const timeline = qs("#visitTimeline");
+  timeline.innerHTML = `<div class="empty-state">Загрузка расписания</div>`;
 
   try {
-    const query = visitQuery();
+    const query = scheduleQuery();
     const data = await api(`/visits/${query ? `?${query}` : ""}`);
-    state.visits = Array.isArray(data) ? data : data.items || [];
+    state.visits = (Array.isArray(data) ? data : data.items || []).sort((a, b) => {
+      return new Date(a.start_time || 0) - new Date(b.start_time || 0);
+    });
     renderVisits();
-    renderDashboardVisits();
-  } catch (error) {
-    if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="6">Ошибка: ${escapeHtml(error.message)}</td></tr>`;
+    if (state.selectedVisit) {
+      const fresh = state.visits.find((visit) => String(visit.id) === String(state.selectedVisit.id));
+      state.selectedVisit = fresh || null;
+      renderAppointmentContext();
     }
+  } catch (error) {
+    timeline.innerHTML = `<div class="empty-state">Расписание недоступно</div>`;
     toast(`Записи: ${error.message}`, "error");
   }
 }
 
-async function createAppointment(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const body = {
-    client_id: Number(form.client_id.value),
-    service_id: Number(form.service_id.value),
-    start_time: localDateTimeToISO(form.start_time.value),
-  };
+function renderVisits() {
+  const timeline = qs("#visitTimeline");
+  qs("#visitsCaption").textContent = `${state.visits.length} записей`;
 
-  try {
-    const created = await api("/visits/", {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-    form.reset();
-    toast(`Запись создана: #${created.id || ""}`);
-    await loadVisits();
-    setView("schedule");
-  } catch (error) {
-    toast(`Не удалось создать запись: ${error.message}`, "error");
+  if (!state.visits.length) {
+    timeline.innerHTML = `<div class="empty-state">На выбранный период записей нет</div>`;
+    return;
   }
+
+  timeline.innerHTML = state.visits.map((visit) => {
+    const active = state.selectedVisit && String(state.selectedVisit.id) === String(visit.id);
+    return `
+      <button class="appointment-card ${active ? "active" : ""}" data-visit-id="${escapeHtml(visit.id)}" type="button">
+        <span class="time-block">${escapeHtml(formatTime(visit.start_time))}</span>
+        <span class="appointment-main">
+          <strong>${escapeHtml(visit.client_name || `Клиент #${visit.client_id || ""}`)}</strong>
+          <span>${escapeHtml(visit.service_name || `Услуга #${visit.service_id || ""}`)} · ${escapeHtml(formatDate(visit.start_time))}</span>
+        </span>
+        <span class="pill ${statusClass(visit.payment_status)}">${escapeHtml(visit.payment_status || "unpaid")}</span>
+      </button>
+    `;
+  }).join("");
+
+  qsa("[data-visit-id]").forEach((item) => {
+    item.addEventListener("click", () => selectVisit(item.dataset.visitId));
+  });
 }
 
-async function updatePayment(event) {
+function selectVisit(id) {
+  state.selectedVisit = state.visits.find((visit) => String(visit.id) === String(id)) || null;
+  renderVisits();
+  renderAppointmentContext();
+}
+
+function renderAppointmentContext() {
+  const target = qs("#appointmentContext");
+  const caption = qs("#appointmentContextCaption");
+  const visit = state.selectedVisit;
+
+  if (!visit) {
+    caption.textContent = "Выберите запись в расписании";
+    target.className = "empty-state";
+    target.textContent = "Запись не выбрана";
+    return;
+  }
+
+  caption.textContent = `Запись #${visit.id}`;
+  target.className = "context-body";
+  target.innerHTML = `
+    <div class="context-title">
+      <strong>${escapeHtml(visit.client_name || `Клиент #${visit.client_id || ""}`)}</strong>
+      <span>${escapeHtml(visit.service_name || `Услуга #${visit.service_id || ""}`)}</span>
+    </div>
+    <div class="kv-grid">
+      <div class="kv"><span>Время</span><strong>${escapeHtml(formatDate(visit.start_time))}</strong></div>
+      <div class="kv"><span>Оплата</span><strong>${escapeHtml(visit.payment_status || "unpaid")}</strong></div>
+      <div class="kv"><span>Статус</span><strong>${escapeHtml(visit.appointment_status || "scheduled")}</strong></div>
+      <div class="kv"><span>ID клиента</span><strong>${escapeHtml(visit.client_id || "-")}</strong></div>
+    </div>
+    <form class="form-stack" id="contextPaymentForm">
+      <div class="two-col">
+        <label>
+          <span>Статус оплаты</span>
+          <select name="payment_status">
+            <option value="paid">paid</option>
+            <option value="partially_paid">partially_paid</option>
+            <option value="unpaid">unpaid</option>
+          </select>
+        </label>
+        <label>
+          <span>Сумма</span>
+          <input name="amount" type="number" min="0" step="1" value="${escapeHtml(visit.amount || 0)}">
+        </label>
+      </div>
+      <button class="primary-button" type="submit">Провести оплату</button>
+    </form>
+    <form class="form-stack" id="contextSubscriptionVisitForm">
+      <div class="two-col">
+        <label>
+          <span>ID абонемента</span>
+          <input name="subscription_id" inputmode="numeric" placeholder="subscription_id">
+        </label>
+        <label>
+          <span>Дата</span>
+          <input name="visit_date" type="date" value="${new Date().toISOString().slice(0, 10)}">
+        </label>
+      </div>
+      <button class="secondary-button" type="submit">Списать по абонементу</button>
+    </form>
+    <div class="action-grid">
+      <button class="secondary-button" id="contextOpenClient" type="button">Карточка клиента</button>
+      <button class="ghost-button" id="contextRefresh" type="button">Обновить</button>
+    </div>
+  `;
+
+  qs("#contextPaymentForm").payment_status.value = visit.payment_status || "paid";
+  qs("#contextPaymentForm").addEventListener("submit", updatePaymentFromContext);
+  qs("#contextSubscriptionVisitForm").addEventListener("submit", addSubscriptionVisitFromContext);
+  qs("#contextOpenClient").addEventListener("click", () => openClientFromVisit(visit));
+  qs("#contextRefresh").addEventListener("click", loadVisits);
+}
+
+async function updatePaymentFromContext(event) {
   event.preventDefault();
+  const visit = state.selectedVisit;
+  if (!visit) return;
   const form = event.currentTarget;
-  const appointmentId = form.appointment_id.value.trim();
   const body = {
-    client_id: Number(form.client_id.value),
+    client_id: Number(visit.client_id),
     payment_status: form.payment_status.value,
-    amount: Number(form.amount.value),
+    amount: Number(form.amount.value || 0),
   };
 
   try {
-    await api(`/payments/visits/${encodeURIComponent(appointmentId)}`, {
+    await api(`/payments/visits/${encodeURIComponent(visit.id)}`, {
       method: "PUT",
       body: JSON.stringify(body),
     });
-    form.reset();
-    toast(`Оплата проведена по записи #${appointmentId}`);
+    toast("Оплата обновлена");
     await loadVisits();
     await loadStatistics();
   } catch (error) {
@@ -233,56 +337,27 @@ async function updatePayment(event) {
   }
 }
 
-function renderVisits() {
-  const tbody = qs("#visitsTable");
-  if (!tbody) return;
-  qs("#visitsCaption").textContent = `${state.visits.length} записей`;
+async function addSubscriptionVisitFromContext(event) {
+  event.preventDefault();
+  const visit = state.selectedVisit;
+  if (!visit) return;
+  const form = event.currentTarget;
+  const body = {
+    subscription_id: Number(form.subscription_id.value),
+    appointment_id: Number(visit.id),
+    visit_date: dateToISO(form.visit_date.value),
+  };
 
-  if (!state.visits.length) {
-    tbody.innerHTML = `<tr><td colspan="6">Записей нет</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = state.visits.map((visit) => `
-    <tr data-visit-id="${escapeHtml(visit.id)}" data-client-id="${escapeHtml(visit.client_id || "")}">
-      <td>${escapeHtml(visit.id)}</td>
-      <td>${escapeHtml(visit.client_name || visit.client_id)}</td>
-      <td>${escapeHtml(visit.service_name || visit.service_id)}</td>
-      <td>${escapeHtml(formatDate(visit.start_time))}</td>
-      <td><span class="pill ${statusClass(visit.appointment_status)}">${escapeHtml(visit.appointment_status || "scheduled")}</span></td>
-      <td><span class="pill ${statusClass(visit.payment_status)}">${escapeHtml(visit.payment_status || "unknown")}</span></td>
-    </tr>
-  `).join("");
-
-  qsa("#visitsTable tr[data-visit-id]").forEach((row) => {
-    row.addEventListener("click", () => {
-      const paymentForm = qs("#paymentForm");
-      paymentForm.appointment_id.value = row.dataset.visitId || "";
-      paymentForm.client_id.value = row.dataset.clientId || "";
-      toast("Запись подставлена в форму оплаты");
+  try {
+    await api("/payments/subscription", {
+      method: "POST",
+      body: JSON.stringify(body),
     });
-  });
-}
-
-function renderDashboardVisits() {
-  const target = qs("#dashboardVisits");
-  if (!target) return;
-
-  const items = state.visits.slice(0, 6);
-  if (!items.length) {
-    target.innerHTML = `<div class="empty-state">Записей нет</div>`;
-    return;
+    toast("Занятие списано по абонементу");
+    await loadVisits();
+  } catch (error) {
+    toast(`Списание не выполнено: ${error.message}`, "error");
   }
-
-  target.innerHTML = items.map((visit) => `
-    <article class="list-row">
-      <div>
-        <strong>${escapeHtml(visit.client_name || `Клиент ${visit.client_id || ""}`)}</strong>
-        <span>${escapeHtml(visit.service_name || "Услуга")} · ${escapeHtml(formatDate(visit.start_time))}</span>
-      </div>
-      <span class="pill ${statusClass(visit.appointment_status)}">${escapeHtml(visit.appointment_status || "scheduled")}</span>
-    </article>
-  `).join("");
 }
 
 async function loadServices() {
@@ -290,7 +365,6 @@ async function loadServices() {
     const data = await api("/services/");
     state.services = Array.isArray(data) ? data : data.items || [];
     renderServices();
-    renderDashboardServices();
     renderServiceOptions();
   } catch (error) {
     toast(`Услуги: ${error.message}`, "error");
@@ -324,35 +398,9 @@ function renderServices() {
       <strong>${escapeHtml(service.name)}</strong>
       <span>${escapeHtml(service.duration)} мин</span>
       <div class="kv-grid">
-        <div class="kv">
-          <span>ID</span>
-          <strong>${escapeHtml(service.service_id || service.id)}</strong>
-        </div>
-        <div class="kv">
-          <span>Цена</span>
-          <strong>${escapeHtml(formatMoney(service.price))}</strong>
-        </div>
+        <div class="kv"><span>ID</span><strong>${escapeHtml(service.service_id || service.id)}</strong></div>
+        <div class="kv"><span>Цена</span><strong>${escapeHtml(formatMoney(service.price))}</strong></div>
       </div>
-    </article>
-  `).join("");
-}
-
-function renderDashboardServices() {
-  const target = qs("#dashboardServices");
-  if (!target) return;
-  const items = state.services.slice(0, 5);
-  if (!items.length) {
-    target.innerHTML = `<div class="empty-state">Каталог пуст</div>`;
-    return;
-  }
-
-  target.innerHTML = items.map((service) => `
-    <article class="list-row">
-      <div>
-        <strong>${escapeHtml(service.name)}</strong>
-        <span>${escapeHtml(service.duration)} мин</span>
-      </div>
-      <strong>${escapeHtml(formatMoney(service.price))}</strong>
     </article>
   `).join("");
 }
@@ -379,33 +427,56 @@ async function createService(event) {
   }
 }
 
-async function createClient(event) {
+async function createClientFromForm(event) {
   event.preventDefault();
   const form = event.currentTarget;
-  const body = {
+  await createClient({
     name: form.name.value.trim(),
     phone: form.phone.value.trim(),
-  };
+  });
+  form.reset();
+}
 
+async function createAppointmentClient(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  await createClient({
+    name: form.name.value.trim(),
+    phone: form.phone.value.trim(),
+  });
+  form.reset();
+}
+
+async function createClient(body) {
   try {
     const result = await api("/clients/", {
       method: "POST",
       body: JSON.stringify(body),
     });
-    form.reset();
-    qs("#clientPhone").value = result.phone || body.phone;
-    qs("#clientId").value = result.client_id || "";
-    qs("#appointmentForm").client_id.value = result.client_id || "";
-    qs("#sellMembershipForm").client_id.value = result.client_id || "";
-    qs("#membershipClientId").value = result.client_id || "";
+    const client = {
+      id: result.client_id,
+      name: body.name,
+      phone: result.phone || body.phone,
+    };
+    await selectClient(client);
     toast(`Клиент создан: #${result.client_id}`);
-    if (result.client_id) await loadClient(result.client_id);
   } catch (error) {
     toast(`Клиент не создан: ${error.message}`, "error");
   }
 }
 
-async function findClient() {
+async function findClientByPhone(phone) {
+  const result = await api(`/clients/find?phone=${encodeURIComponent(phone)}`);
+  const info = await api(`/clients/info?client_id=${encodeURIComponent(result.client_id)}`);
+  return {
+    id: result.client_id,
+    phone: result.phone,
+    ...info,
+  };
+}
+
+async function searchClient(event) {
+  event.preventDefault();
   const phone = qs("#clientPhone").value.trim();
   if (!phone) {
     toast("Введите телефон", "error");
@@ -413,35 +484,48 @@ async function findClient() {
   }
 
   try {
-    const result = await api(`/clients/find?phone=${encodeURIComponent(phone)}`);
-    qs("#clientId").value = result.client_id || "";
-    await loadClient(result.client_id);
+    await selectClient(await findClientByPhone(phone));
   } catch (error) {
-    toast(`Клиент: ${error.message}`, "error");
+    toast(`Клиент не найден: ${error.message}`, "error");
   }
 }
 
-async function loadClient(idFromSearch) {
-  const id = idFromSearch || qs("#clientId").value.trim();
-  if (!id) {
-    toast("Введите ID клиента", "error");
+async function searchAppointmentClient(event) {
+  event.preventDefault();
+  const phone = qs("#appointmentClientPhone").value.trim();
+  if (!phone) {
+    toast("Введите телефон", "error");
     return;
   }
 
   try {
-    const client = await api(`/clients/info?client_id=${encodeURIComponent(id)}`);
-    renderClient(client, id);
+    await selectClient(await findClientByPhone(phone));
   } catch (error) {
-    toast(`Карточка: ${error.message}`, "error");
+    toast(`Клиент не найден: ${error.message}`, "error");
   }
 }
 
-function renderClient(client, id) {
-  qs("#clientCardCaption").textContent = `ID ${id}`;
-  qs("#clientCard").className = "client-card";
-  qs("#clientCard").innerHTML = `
-    <h3 class="client-name">${escapeHtml(client.name)}</h3>
-    <div>${escapeHtml(client.phone || "")}</div>
+async function selectClient(client) {
+  state.selectedClient = client;
+  qs("#appointmentForm").client_id.value = client.id || "";
+  qs("#selectedClientBox").innerHTML = `
+    <strong>${escapeHtml(client.name || `Клиент #${client.id}`)}</strong><br>
+    <span>${escapeHtml(client.phone || "")}</span>
+  `;
+  renderClient(client);
+  fillSalesClient();
+  await loadClientMemberships();
+}
+
+function renderClient(client) {
+  const target = qs("#clientCard");
+  qs("#clientCardCaption").textContent = `ID ${client.id || "-"}`;
+  target.className = "client-card";
+  target.innerHTML = `
+    <div class="client-title">
+      <strong>${escapeHtml(client.name || `Клиент #${client.id || ""}`)}</strong>
+      <span>${escapeHtml(client.phone || "")}</span>
+    </div>
     <div class="kv-grid">
       <div class="kv"><span>Визиты</span><strong>${escapeHtml(client.visit_count || 0)}</strong></div>
       <div class="kv"><span>Потрачено</span><strong>${escapeHtml(formatMoney(client.spent))}</strong></div>
@@ -453,18 +537,24 @@ function renderClient(client, id) {
   `;
 }
 
-async function loadMembershipTypes() {
-  const target = qs("#membershipTypes");
-  if (target) target.innerHTML = `<div class="empty-state">Загрузка...</div>`;
+async function openClientFromVisit(visit) {
+  if (!visit.client_id) return;
+  try {
+    const info = await api(`/clients/info?client_id=${encodeURIComponent(visit.client_id)}`);
+    await selectClient({ id: visit.client_id, ...info });
+    setView("clients");
+  } catch (error) {
+    toast(`Карточка клиента недоступна: ${error.message}`, "error");
+  }
+}
 
+async function loadMembershipTypes() {
   try {
     const data = await api("/subscriptions/types");
     state.membershipTypes = Array.isArray(data) ? data : data.items || [];
-    renderMembershipTypes();
     renderMembershipOptions();
   } catch (error) {
-    toast(`Абонементы: ${error.message}`, "error");
-    if (target) target.innerHTML = `<div class="empty-state">Каталог недоступен</div>`;
+    toast(`Типы абонементов: ${error.message}`, "error");
   }
 }
 
@@ -479,57 +569,55 @@ function renderMembershipOptions() {
   if (current) select.value = current;
 }
 
-function renderMembershipTypes() {
-  const target = qs("#membershipTypes");
-  if (!target) return;
-  qs("#membershipCaption").textContent = `${state.membershipTypes.length} типов`;
+function fillMembershipSaleFields() {
+  const select = qs("#sellMembershipTypeSelect");
+  const form = qs("#sellMembershipForm");
+  const item = state.membershipTypes.find((membership) => {
+    return String(membership.subscription_types_id || membership.id) === select.value;
+  });
+  if (!item) return;
+  form.cost.value = item.cost || "";
+  form.sessions_count.value = item.sessions_count || "";
+}
 
-  if (!state.membershipTypes.length) {
-    target.innerHTML = `<div class="empty-state">Типов нет</div>`;
-    return;
-  }
-
-  target.innerHTML = state.membershipTypes.map((item) => `
-    <article class="membership-card">
-      <strong>${escapeHtml(item.name)}</strong>
-      <span>${escapeHtml(item.sessions_count)} занятий</span>
-      <div class="kv-grid">
-        <div class="kv"><span>ID</span><strong>${escapeHtml(item.subscription_types_id || item.id)}</strong></div>
-        <div class="kv"><span>Цена</span><strong>${escapeHtml(formatMoney(item.cost))}</strong></div>
-      </div>
-    </article>
-  `).join("");
+function fillSalesClient() {
+  const form = qs("#sellMembershipForm");
+  const client = state.selectedClient;
+  if (!form || !client) return;
+  form.client_id.value = client.id || "";
+  form.client_label.value = `${client.name || `Клиент #${client.id}`} ${client.phone ? `· ${client.phone}` : ""}`;
+  qs("#saleClientCaption").textContent = `Выбран ${client.name || `клиент #${client.id}`}`;
 }
 
 async function loadClientMemberships() {
-  const id = qs("#membershipClientId").value.trim();
-  if (!id) {
-    toast("Введите ID клиента", "error");
+  const target = qs("#clientMemberships");
+  if (!target) return;
+  const client = state.selectedClient;
+  if (!client || !client.id) {
+    target.innerHTML = `<div class="empty-state">Клиент не выбран</div>`;
     return;
   }
 
-  const target = qs("#clientMemberships");
-  target.innerHTML = `<div class="empty-state">Загрузка...</div>`;
-
+  target.innerHTML = `<div class="empty-state">Загрузка абонементов</div>`;
   try {
-    const data = await api(`/subscriptions/client?client_id=${encodeURIComponent(id)}`);
+    const data = await api(`/subscriptions/client?client_id=${encodeURIComponent(client.id)}`);
     const items = data.subscriptions || [];
     if (!items.length) {
-      target.innerHTML = `<div class="empty-state">Абонементов нет</div>`;
+      target.innerHTML = `<div class="empty-state">Активных абонементов нет</div>`;
       return;
     }
     target.innerHTML = items.map((item) => `
       <article class="list-row">
         <div>
-          <strong>Абонемент ${escapeHtml(item.subscription_id)}</strong>
+          <strong>Абонемент #${escapeHtml(item.subscription_id)}</strong>
           <span>Остаток занятий</span>
         </div>
         <strong>${escapeHtml(item.current_balance)}</strong>
       </article>
     `).join("");
   } catch (error) {
+    target.innerHTML = `<div class="empty-state">Не удалось загрузить абонементы</div>`;
     toast(`Абонементы клиента: ${error.message}`, "error");
-    target.innerHTML = `<div class="empty-state">Ошибка загрузки</div>`;
   }
 }
 
@@ -543,13 +631,16 @@ async function sellMembership(event) {
     sessions_count: Number(form.sessions_count.value),
   };
 
+  if (!body.client_id) {
+    toast("Сначала выберите клиента", "error");
+    return;
+  }
+
   try {
     await api("/subscriptions/sell", {
       method: "POST",
       body: JSON.stringify(body),
     });
-    qs("#membershipClientId").value = String(body.client_id);
-    form.reset();
     toast("Абонемент продан");
     await loadClientMemberships();
     await loadStatistics();
@@ -558,100 +649,106 @@ async function sellMembership(event) {
   }
 }
 
-async function addSubscriptionVisit(event) {
+async function createAppointment(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const body = {
-    subscription_id: Number(form.subscription_id.value),
-    appointment_id: Number(form.appointment_id.value),
-    visit_date: dateToISO(form.visit_date.value),
+    client_id: Number(form.client_id.value),
+    service_id: Number(form.service_id.value),
+    start_time: localDateTimeToISO(form.start_time.value),
   };
 
+  if (!body.client_id) {
+    toast("Сначала выберите клиента", "error");
+    return;
+  }
+
   try {
-    await api("/payments/subscription", {
+    const created = await api("/visits/", {
       method: "POST",
       body: JSON.stringify(body),
     });
+    qs("#appointmentDialog").close();
     form.reset();
-    toast("Занятие списано по абонементу");
+    toast(`Запись создана: #${created.id || ""}`);
     await loadVisits();
+    setView("schedule");
   } catch (error) {
-    toast(`Списание не выполнено: ${error.message}`, "error");
+    toast(`Не удалось создать запись: ${error.message}`, "error");
   }
 }
 
-function fillMembershipSaleFields() {
-  const select = qs("#sellMembershipTypeSelect");
-  const form = qs("#sellMembershipForm");
-  if (!select || !form) return;
-  const item = state.membershipTypes.find((membership) => {
-    const id = String(membership.subscription_types_id || membership.id);
-    return id === select.value;
-  });
-  if (!item) return;
-  form.cost.value = item.cost || "";
-  form.sessions_count.value = item.sessions_count || "";
+function openAppointmentDialog() {
+  loadServices();
+  const form = qs("#appointmentForm");
+  const date = new Date();
+  date.setHours(date.getHours() + 1, 0, 0, 0);
+  form.start_time.value = date.toISOString().slice(0, 16);
+  if (state.selectedClient) {
+    form.client_id.value = state.selectedClient.id || "";
+  }
+  qs("#appointmentDialog").showModal();
 }
 
 function refreshCurrentView() {
-  if (state.view === "dashboard") {
-    loadStatistics();
-    loadVisits();
-    loadServices();
-    loadMembershipTypes();
-  }
   if (state.view === "schedule") {
     loadVisits();
     loadServices();
   }
-  if (state.view === "catalog") loadServices();
-  if (state.view === "memberships") loadMembershipTypes();
+  if (state.view === "clients") {
+    if (state.selectedClient) renderClient(state.selectedClient);
+  }
+  if (state.view === "sales") {
+    loadMembershipTypes();
+    fillSalesClient();
+    loadClientMemberships();
+  }
+  if (state.view === "services") loadServices();
+  if (state.view === "reports") loadStatistics();
 }
 
 function bindEvents() {
   qsa(".nav-item").forEach((item) => {
     item.addEventListener("click", () => setView(item.dataset.view));
   });
-  qsa("[data-view-jump]").forEach((item) => {
-    item.addEventListener("click", () => setView(item.dataset.viewJump));
+
+  qsa("[data-range]").forEach((item) => {
+    item.addEventListener("click", () => {
+      state.range = item.dataset.range;
+      qsa("[data-range]").forEach((button) => button.classList.toggle("active", button === item));
+      loadVisits();
+    });
   });
+
   qs("#refreshButton").addEventListener("click", refreshCurrentView);
-  qs("#loadVisitsButton").addEventListener("click", loadVisits);
+  qs("#openAppointmentButton").addEventListener("click", openAppointmentDialog);
+  qs("#openClientButton").addEventListener("click", () => setView("clients"));
+  qs("#clientBookButton").addEventListener("click", openAppointmentDialog);
+  qs("#scheduleDate").addEventListener("change", loadVisits);
+  qs("#visitStatus").addEventListener("change", loadVisits);
+  qs("#clientSearchForm").addEventListener("submit", searchClient);
+  qs("#clientForm").addEventListener("submit", createClientFromForm);
+  qs("#appointmentClientSearchForm").addEventListener("submit", searchAppointmentClient);
+  qs("#appointmentClientCreateForm").addEventListener("submit", createAppointmentClient);
   qs("#appointmentForm").addEventListener("submit", createAppointment);
-  qs("#paymentForm").addEventListener("submit", updatePayment);
-  qs("#reloadServicesButton").addEventListener("click", loadServices);
   qs("#serviceForm").addEventListener("submit", createService);
-  qs("#clientForm").addEventListener("submit", createClient);
-  qs("#findClientButton").addEventListener("click", findClient);
-  qs("#loadClientButton").addEventListener("click", () => loadClient());
-  qs("#reloadMembershipsButton").addEventListener("click", loadMembershipTypes);
-  qs("#loadMembershipClientButton").addEventListener("click", loadClientMemberships);
   qs("#sellMembershipForm").addEventListener("submit", sellMembership);
-  qs("#subscriptionVisitForm").addEventListener("submit", addSubscriptionVisit);
   qs("#sellMembershipTypeSelect").addEventListener("change", fillMembershipSaleFields);
 }
 
 function initDates() {
   const now = new Date();
-  const start = new Date(now);
-  start.setDate(now.getDate() - 7);
-  const end = new Date(now);
-  end.setDate(now.getDate() + 14);
-  qs("#visitFrom").value = start.toISOString().slice(0, 10);
-  qs("#visitTo").value = end.toISOString().slice(0, 10);
-  const appointmentDate = new Date(now);
-  appointmentDate.setMinutes(0, 0, 0);
-  appointmentDate.setHours(appointmentDate.getHours() + 1);
-  qs("#appointmentForm").start_time.value = appointmentDate.toISOString().slice(0, 16);
-  qs("#subscriptionVisitForm").visit_date.value = now.toISOString().slice(0, 10);
+  qs("#scheduleDate").value = now.toISOString().slice(0, 10);
 }
 
 function init() {
   bindEvents();
   initDates();
   checkVersion();
-  const initial = window.location.hash.replace("#", "") || "dashboard";
-  setView(titles[initial] ? initial : "dashboard");
+  loadServices();
+  loadMembershipTypes();
+  const initial = window.location.hash.replace("#", "") || "schedule";
+  setView(titles[initial] ? initial : "schedule");
 }
 
 document.addEventListener("DOMContentLoaded", init);

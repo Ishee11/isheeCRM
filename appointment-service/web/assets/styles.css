@@ -423,6 +423,50 @@ h3 {
   border-bottom: 0;
 }
 
+.week-journal {
+  display: grid;
+  gap: 10px;
+}
+
+.week-day {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.week-day-head {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  background: #edf4f6;
+}
+
+.week-day-head strong {
+  text-transform: capitalize;
+}
+
+.week-day-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.week-day-body {
+  display: grid;
+  gap: 8px;
+  min-height: 62px;
+  padding: 8px;
+}
+
+.week-slot {
+  opacity: 1;
+}
+
 .journal-visit {
   width: 100%;
   min-height: 48px;

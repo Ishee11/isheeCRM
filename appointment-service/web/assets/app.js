@@ -34,6 +34,12 @@ const timeOnly = new Intl.DateTimeFormat("ru-RU", {
   minute: "2-digit",
 });
 
+const dayLabel = new Intl.DateTimeFormat("ru-RU", {
+  weekday: "short",
+  day: "2-digit",
+  month: "short",
+});
+
 function qs(selector) {
   return document.querySelector(selector);
 }
@@ -98,6 +104,13 @@ function toDateInputValue(date) {
     String(date.getMonth() + 1).padStart(2, "0"),
     String(date.getDate()).padStart(2, "0"),
   ].join("-");
+}
+
+function dateFromInputValue(value) {
+  const match = text(value, "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return new Date();
+  const [, year, month, day] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day));
 }
 
 function toDateTimeInputValue(date) {
@@ -262,8 +275,14 @@ async function loadVisits() {
 
 function renderVisits() {
   const timeline = qs("#visitTimeline");
-  qs("#visitsCaption").textContent = `${state.visits.length} записей`;
+  qs("#visitsCaption").textContent = `${state.visits.length} записей · ${scheduleRangeLabel()}`;
   renderJournalTotals();
+
+  if (state.range === "week") {
+    renderWeekVisits(timeline);
+    bindVisitActions();
+    return;
+  }
 
   const hours = journalHours();
   timeline.innerHTML = `
@@ -274,12 +293,65 @@ function renderVisits() {
     </div>
   `;
 
+  bindVisitActions();
+}
+
+function bindVisitActions() {
   qsa("[data-visit-id]").forEach((item) => {
     item.addEventListener("click", () => selectVisit(item.dataset.visitId));
   });
   qsa("[data-slot-hour]").forEach((item) => {
-    item.addEventListener("click", () => openAppointmentDialog(Number(item.dataset.slotHour)));
+    item.addEventListener("click", () => openAppointmentDialog(Number(item.dataset.slotHour), item.dataset.slotDate));
   });
+}
+
+function scheduleRangeLabel() {
+  const selected = qs("#scheduleDate").value;
+  if (!selected || state.range === "all") return "все даты";
+  const from = dateFromInputValue(selected);
+  if (state.range === "today") return dayLabel.format(from);
+  const to = new Date(from);
+  to.setDate(from.getDate() + 6);
+  return `${dayLabel.format(from)} - ${dayLabel.format(to)}`;
+}
+
+function weekDays() {
+  const from = dateFromInputValue(qs("#scheduleDate").value);
+  return Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(from);
+    day.setDate(from.getDate() + index);
+    return day;
+  });
+}
+
+function visitDateKey(visit) {
+  return toDateInputValue(appointmentDate(visit.start_time));
+}
+
+function renderWeekVisits(timeline) {
+  timeline.innerHTML = `
+    <div class="week-journal">
+      ${weekDays().map((day) => renderWeekDay(day)).join("")}
+    </div>
+  `;
+}
+
+function renderWeekDay(day) {
+  const key = toDateInputValue(day);
+  const visits = state.visits.filter((visit) => visitDateKey(visit) === key);
+  return `
+    <section class="week-day">
+      <header class="week-day-head">
+        <strong>${escapeHtml(dayLabel.format(day))}</strong>
+        <span>${visits.length} записей</span>
+      </header>
+      <div class="week-day-body">
+        ${visits.length
+          ? visits.map(renderJournalVisit).join("")
+          : `<button class="empty-slot week-slot" data-slot-date="${key}" data-slot-hour="9" type="button">Свободный день</button>`}
+      </div>
+    </section>
+  `;
 }
 
 function journalHours() {
@@ -818,10 +890,10 @@ async function createAppointment(event) {
   }
 }
 
-function openAppointmentDialog(hour) {
+function openAppointmentDialog(hour, dateValue) {
   loadServices();
   const form = qs("#appointmentForm");
-  const selectedDate = qs("#scheduleDate").value || toDateInputValue(new Date());
+  const selectedDate = dateValue || qs("#scheduleDate").value || toDateInputValue(new Date());
   const date = new Date(`${selectedDate}T00:00:00`);
   const targetHour = Number.isFinite(hour) ? hour : new Date().getHours() + 1;
   date.setHours(targetHour, 0, 0, 0);

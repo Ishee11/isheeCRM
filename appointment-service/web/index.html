@@ -240,26 +240,51 @@
       </section>
 
       <section class="view" id="view-reports">
+        <section class="panel reports-filter">
+          <div class="panel-head">
+            <div>
+              <h2>Период статистики</h2>
+              <p id="statsCaption">Текущий месяц</p>
+            </div>
+          </div>
+          <form class="report-tools" id="statsPeriodForm">
+            <div class="segmented">
+              <button class="active" type="button" data-stats-range="month">Месяц</button>
+              <button type="button" data-stats-range="week">Неделя</button>
+              <button type="button" data-stats-range="today">Сегодня</button>
+            </div>
+            <label>
+              <span>С</span>
+              <input id="statsStartDate" name="start_date" type="date" required>
+            </label>
+            <label>
+              <span>По</span>
+              <input id="statsEndDate" name="end_date" type="date" required>
+            </label>
+            <button class="primary-button" type="submit">Показать</button>
+          </form>
+        </section>
+
         <div class="metric-grid">
           <article class="metric-card">
             <span class="metric-label">Визиты</span>
             <strong id="metricVisits">-</strong>
-            <small>текущий месяц</small>
+            <small id="metricVisitsCaption">за выбранный период</small>
           </article>
           <article class="metric-card">
             <span class="metric-label">Выручка</span>
             <strong id="metricRevenue">-</strong>
-            <small>оплаченные записи</small>
+            <small>операции за период</small>
           </article>
           <article class="metric-card">
             <span class="metric-label">Услуги</span>
             <strong id="metricServices">-</strong>
-            <small>активный каталог</small>
+            <small>оплаты услуг</small>
           </article>
           <article class="metric-card">
             <span class="metric-label">Абонементы</span>
             <strong id="metricSubscriptions">-</strong>
-            <small>продажи за месяц</small>
+            <small>продажи абонементов</small>
           </article>
         </div>
       </section>

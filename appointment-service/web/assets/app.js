@@ -217,15 +217,54 @@ async function checkVersion() {
 }
 
 async function loadStatistics() {
+  const startDate = qs("#statsStartDate").value;
+  const endDate = qs("#statsEndDate").value;
+  if (!startDate || !endDate) return;
+
   try {
-    const stats = await api("/statistics/current-month");
+    const stats = await api("/statistics/", {
+      method: "POST",
+      body: JSON.stringify({
+        start_date: startDate,
+        end_date: endDate,
+      }),
+    });
     qs("#metricVisits").textContent = text(stats.total_visits, "0");
     qs("#metricRevenue").textContent = formatMoney(stats.total_earnings);
     qs("#metricServices").textContent = text(stats.total_services, "0");
     qs("#metricSubscriptions").textContent = text(stats.total_subscriptions, "0");
+    qs("#statsCaption").textContent = statsPeriodLabel(startDate, endDate);
+    qs("#metricVisitsCaption").textContent = statsPeriodLabel(startDate, endDate);
   } catch (error) {
     toast(`Статистика: ${error.message}`, "error");
   }
+}
+
+function statsPeriodLabel(startDate, endDate) {
+  const start = dayLabel.format(dateFromInputValue(startDate));
+  const end = dayLabel.format(dateFromInputValue(endDate));
+  return startDate === endDate ? start : `${start} - ${end}`;
+}
+
+function setStatsRange(range) {
+  const now = new Date();
+  let start = new Date(now);
+  let end = new Date(now);
+
+  if (range === "month") {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  if (range === "week") {
+    start = new Date(now);
+    start.setDate(now.getDate() - 6);
+  }
+
+  qs("#statsStartDate").value = toDateInputValue(start);
+  qs("#statsEndDate").value = toDateInputValue(end);
+  qsa("[data-stats-range]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.statsRange === range);
+  });
+  loadStatistics();
 }
 
 function scheduleQuery() {
@@ -952,11 +991,20 @@ function bindEvents() {
   qs("#serviceForm").addEventListener("submit", createService);
   qs("#sellMembershipForm").addEventListener("submit", sellMembership);
   qs("#sellMembershipTypeSelect").addEventListener("change", fillMembershipSaleFields);
+  qs("#statsPeriodForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    qsa("[data-stats-range]").forEach((button) => button.classList.remove("active"));
+    loadStatistics();
+  });
+  qsa("[data-stats-range]").forEach((button) => {
+    button.addEventListener("click", () => setStatsRange(button.dataset.statsRange));
+  });
 }
 
 function initDates() {
   const now = new Date();
   qs("#scheduleDate").value = toDateInputValue(now);
+  setStatsRange("month");
 }
 
 function initTimezoneLabels() {

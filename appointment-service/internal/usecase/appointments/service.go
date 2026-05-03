@@ -35,8 +35,11 @@ type CreateRequest struct {
 }
 
 type ListFilter struct {
-	OnlyUnpaid bool
-	Start      *time.Time
+	OnlyUnpaid        bool
+	ClientID          int
+	AppointmentStatus string
+	From              *time.Time
+	To                *time.Time
 }
 
 type Appointment struct {

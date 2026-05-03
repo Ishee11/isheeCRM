@@ -1,11 +1,11 @@
 package postgres
 
 import (
-	"appointment-service/database"
-	"appointment-service/internal/usecase/billing"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Ishee11/isheeCRM/appointment-service/database"
+	"github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/billing"
 	"time"
 
 	"github.com/jackc/pgx/v5"

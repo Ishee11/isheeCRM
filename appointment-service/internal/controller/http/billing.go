@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"appointment-service/internal/entity"
-	"appointment-service/internal/usecase/billing"
+	"github.com/Ishee11/isheeCRM/appointment-service/internal/entity"
+	"github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/billing"
 
 	"github.com/gin-gonic/gin"
 )
@@ -140,18 +140,21 @@ func GetSubscriptionTypes(c *gin.Context) {
 		return
 	}
 
-	subscriptionTypes := make(map[string]entity.SubscriptionType, len(types))
+	subscriptionTypes := make([]entity.SubscriptionType, 0, len(types))
 	for _, subscriptionType := range types {
-		subscriptionTypes[subscriptionType.Name] = entity.SubscriptionType{
+		subscriptionTypes = append(subscriptionTypes, entity.SubscriptionType{
 			ID:            subscriptionType.ID,
 			Name:          subscriptionType.Name,
 			Cost:          subscriptionType.Cost,
 			SessionsCount: subscriptionType.SessionsCount,
 			ServiceIDs:    subscriptionType.ServiceIDs,
-		}
+		})
 	}
 
-	c.JSON(http.StatusOK, subscriptionTypes)
+	c.JSON(http.StatusOK, gin.H{
+		"items": subscriptionTypes,
+		"total": len(subscriptionTypes),
+	})
 }
 
 // SellSubscription создаёт и продаёт абонемент клиенту

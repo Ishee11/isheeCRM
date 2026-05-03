@@ -1,10 +1,9 @@
 package handlers
 
 import (
-	"appointment-service/internal/entity"
-	"appointment-service/internal/usecase/services"
 	"errors"
-	"fmt"
+	"github.com/Ishee11/isheeCRM/appointment-service/internal/entity"
+	"github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/services"
 	"net/http"
 	"strconv"
 
@@ -59,21 +58,20 @@ func GetServices(c *gin.Context) {
 		return
 	}
 
-	servicesMap := make(map[string]entity.Service, len(list))
+	result := make([]entity.Service, 0, len(list))
 	for _, service := range list {
-		key := service.Name
-		if service.Duration > 0 && service.Price > 0 {
-			key = fmt.Sprintf("%s - %d мин. %.0f руб.", service.Name, service.Duration, service.Price)
-		}
-		servicesMap[key] = entity.Service{
+		result = append(result, entity.Service{
 			ID:       service.ID,
 			Name:     service.Name,
 			Duration: service.Duration,
 			Price:    service.Price,
-		}
+		})
 	}
 
-	c.JSON(http.StatusOK, servicesMap)
+	c.JSON(http.StatusOK, gin.H{
+		"items": result,
+		"total": len(result),
+	})
 }
 
 func DeleteService(c *gin.Context) {

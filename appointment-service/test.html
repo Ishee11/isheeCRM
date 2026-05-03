@@ -245,14 +245,15 @@ function renderVisitsTable(){
     // основные поля: адаптируй в зависимости от реальной структуры
     const id = it.id || it.visit_id || it.id_visit || it.visitId || '-';
     const client = it.client_name || (it.client && (it.client.name || it.client.fullname)) || (it.client_phone||'-');
-    const date = it.date || it.scheduled_at || it.time || '-';
-    const status = it.status || '-';
+    const date = it.start_time || it.date || it.scheduled_at || it.time || '-';
+    const status = it.appointment_status || it.status || '-';
+    const payment = it.payment_status || '-';
     return `<tr data-id="${id}" onclick="selectVisit('${id}')">
-      <td>${id}</td><td>${escapeHtml(client)}</td><td class="small">${date}</td><td>${status}</td>
+      <td>${id}</td><td>${escapeHtml(client)}</td><td class="small">${date}</td><td>${status}</td><td>${payment}</td>
     </tr>`;
   }).join('');
   const html = `<table>
-    <thead><tr><th>ID</th><th>Клиент</th><th>Дата/время</th><th>Статус</th></tr></thead>
+    <thead><tr><th>ID</th><th>Клиент</th><th>Дата/время</th><th>Статус</th><th>Оплата</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
   <div class="pager">
@@ -278,8 +279,9 @@ function selectVisit(id){
   dp.innerHTML += `<div style="font-weight:700;margin-bottom:6px">Запись ID: ${escapeHtml(item.id||item.visit_id||item.visitId||'')}</div>`;
   // Показываем ключевые поля
   dp.innerHTML += createKV('Клиент', item.client_name || item.client?.name || item.client_phone || '-');
-  dp.innerHTML += createKV('Дата/время', item.date || item.scheduled_at || '-');
-  dp.innerHTML += createKV('Статус', item.status || '-');
+  dp.innerHTML += createKV('Дата/время', item.start_time || item.date || item.scheduled_at || '-');
+  dp.innerHTML += createKV('Статус', item.appointment_status || item.status || '-');
+  dp.innerHTML += createKV('Оплата', item.payment_status || '-');
   dp.innerHTML += createKV('Услуга', item.service_name || item.service || '-');
   dp.innerHTML += `<div style="margin-top:8px"><button onclick='showRaw(${JSON.stringify(JSON.stringify(item))})'>Показать JSON</button></div>`;
 }
@@ -318,7 +320,7 @@ async function loadServices(){
   const out = document.getElementById('servicesRes'); out.innerHTML = 'Загрузка...';
   try {
     const response = await doFetch('/services/');
-    const data = Array.isArray(response) ? response : (response.services || []);
+    const data = Array.isArray(response) ? response : (response.items || response.services || []);
     if (!data || data.length===0) { out.innerHTML = '<div class="empty">Услуги не найдены</div>'; return; }
     const rows = data.map(s => `<tr><td>${s.service_id||s.id||'-'}</td><td>${escapeHtml(s.name||s.title||'-')}</td><td>${s.duration||'-'}</td><td>${s.price||'-'}</td></tr>`).join('');
     out.innerHTML = `<table><thead><tr><th>ID</th><th>Название</th><th>Длч, мин</th><th>Цена</th></tr></thead><tbody>${rows}</tbody></table>`;

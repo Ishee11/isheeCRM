@@ -1,7 +1,7 @@
 package main
 
 import (
-	"appointment-service/internal/app"
+	"github.com/Ishee11/isheeCRM/appointment-service/internal/app"
 	"log"
 )
 

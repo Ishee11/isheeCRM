@@ -1,10 +1,10 @@
 package postgres
 
 import (
-	"appointment-service/internal/usecase/clients"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/clients"
 	"time"
 
 	"github.com/jackc/pgx/v5"

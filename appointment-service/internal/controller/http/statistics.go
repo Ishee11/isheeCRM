@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"appointment-service/internal/entity"
-	"appointment-service/internal/usecase/statistics"
+	"github.com/Ishee11/isheeCRM/appointment-service/internal/entity"
+	"github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/statistics"
 	"github.com/gin-gonic/gin"
 )
 

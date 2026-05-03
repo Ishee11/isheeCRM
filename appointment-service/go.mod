@@ -1,10 +1,9 @@
-module appointment-service
+module github.com/Ishee11/isheeCRM/appointment-service
 
 go 1.23.2
 
 require (
 	github.com/gin-gonic/gin v1.10.0
-	github.com/iancoleman/orderedmap v0.3.0
 	github.com/jackc/pgx/v5 v5.7.2
 )
 

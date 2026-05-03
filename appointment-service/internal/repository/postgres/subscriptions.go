@@ -1,9 +1,9 @@
 package postgres
 
 import (
-	"appointment-service/internal/usecase/subscriptions"
 	"context"
 	"fmt"
+	"github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/subscriptions"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )

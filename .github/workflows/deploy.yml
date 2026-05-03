@@ -87,15 +87,109 @@ jobs:
           envs: IMAGE_REF,IMAGE_TAG,DEPLOY_PATH,REGISTRY_USERNAME,REGISTRY_PASSWORD
           script: |
             set -euo pipefail
+            : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
+            : "${REGISTRY_USERNAME:?REGISTRY_USERNAME is required}"
+            : "${REGISTRY_PASSWORD:?REGISTRY_PASSWORD is required}"
+            : "${IMAGE_REF:?IMAGE_REF is required}"
+            : "${IMAGE_TAG:?IMAGE_TAG is required}"
+
             echo "${REGISTRY_PASSWORD}" | docker login ghcr.io -u "${REGISTRY_USERNAME}" --password-stdin
+
+            mkdir -p "${DEPLOY_PATH}"
             cd "${DEPLOY_PATH}"
-            
-            cd appointment-service
-            sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${IMAGE_REF}|" .env
+
+            if [ ! -f .env ]; then
+              cat > .env.example <<'ENV'
+            APP_PORT=8081
+            APP_CONTAINER_NAME=appointment-service-app-container
+            APP_IMAGE=ghcr.io/ishee11/isheecrm-appointment-service
+            IMAGE_TAG=latest
+
+            DB_HOST=postgres
+            DB_PORT=5432
+            DB_USER=postgres
+            DB_PASSWORD=change-me
+            DB_NAME=isheecrm
+
+            POSTGRES_IMAGE=postgres:17.6-bookworm
+            POSTGRES_CONTAINER_NAME=postgres-container
+            POSTGRES_PORT=5433
+            POSTGRES_BIND_ADDRESS=127.0.0.1
+            POSTGRES_USER=postgres
+            POSTGRES_PASSWORD=change-me
+            POSTGRES_DB=isheecrm
+            ENV
+              echo ".env is missing in ${DEPLOY_PATH}. Copy .env.example to .env and fill real secrets on the server." >&2
+              exit 1
+            fi
+
+            cat > docker-compose.yml <<'COMPOSE'
+            services:
+              postgres:
+                image: ${POSTGRES_IMAGE:-postgres:17.6-bookworm}
+                container_name: ${POSTGRES_CONTAINER_NAME:-postgres-container}
+                restart: unless-stopped
+                environment:
+                  POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+                  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+                  POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+                volumes:
+                  - isheecrm_isheecrm_data:/var/lib/postgresql/data
+                networks:
+                  - appointment-service_app-network
+                ports:
+                  - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5433}:5432"
+                healthcheck:
+                  test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+                  interval: 10s
+                  timeout: 5s
+                  retries: 5
+
+              app:
+                image: ${APP_IMAGE:?APP_IMAGE is required}:${IMAGE_TAG:-latest}
+                container_name: ${APP_CONTAINER_NAME:-appointment-service-app-container}
+                restart: unless-stopped
+                environment:
+                  APP_PORT: 8080
+                  APP_IMAGE: ${APP_IMAGE:?APP_IMAGE is required}
+                  IMAGE_TAG: ${IMAGE_TAG:-latest}
+                  DB_HOST: ${DB_HOST:-postgres}
+                  DB_PORT: ${DB_PORT:-5432}
+                  DB_USER: ${DB_USER:?DB_USER is required}
+                  DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+                  DB_NAME: ${DB_NAME:?DB_NAME is required}
+                ports:
+                  - "${APP_PORT:-8081}:8080"
+                networks:
+                  - appointment-service_app-network
+                depends_on:
+                  postgres:
+                    condition: service_healthy
+                healthcheck:
+                  test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/healthz"]
+                  interval: 10s
+                  timeout: 5s
+                  retries: 5
+                  start_period: 10s
+
+            networks:
+              appointment-service_app-network:
+                driver: bridge
+
+            volumes:
+              isheecrm_isheecrm_data:
+            COMPOSE
+
+            if grep -q '^APP_IMAGE=' .env; then
+              sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${IMAGE_REF}|" .env
+            else
+              echo "APP_IMAGE=${IMAGE_REF}" >> .env
+            fi
             if grep -q '^IMAGE_TAG=' .env; then
               sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${IMAGE_TAG}|" .env
             else
               echo "IMAGE_TAG=${IMAGE_TAG}" >> .env
             fi
-            chmod +x deploy.sh
-            ./deploy.sh
+
+            docker compose --env-file .env -p appointment-service pull
+            docker compose --env-file .env -p appointment-service up -d --remove-orphans

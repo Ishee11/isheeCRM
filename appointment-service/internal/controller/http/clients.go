@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	clientsuc "appointment-service/internal/usecase/clients"
+	clientsuc "github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/clients"
 	"github.com/gin-gonic/gin"
 )
 

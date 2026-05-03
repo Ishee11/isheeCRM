@@ -9,25 +9,30 @@ import (
 	"syscall"
 	"time"
 
-	"appointment-service/database"
-	controllerhttp "appointment-service/internal/controller/http"
-	postgresrepo "appointment-service/internal/repository/postgres"
-	appointmentsuc "appointment-service/internal/usecase/appointments"
-	"appointment-service/internal/usecase/billing"
-	clientsuc "appointment-service/internal/usecase/clients"
-	servicesuc "appointment-service/internal/usecase/services"
-	statisticsuc "appointment-service/internal/usecase/statistics"
-	subscriptionsuc "appointment-service/internal/usecase/subscriptions"
+	"github.com/Ishee11/isheeCRM/appointment-service/database"
+	controllerhttp "github.com/Ishee11/isheeCRM/appointment-service/internal/controller/http"
+	handlers "github.com/Ishee11/isheeCRM/appointment-service/internal/controller/http"
+	postgresrepo "github.com/Ishee11/isheeCRM/appointment-service/internal/repository/postgres"
+	appointmentsuc "github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/appointments"
+	"github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/billing"
+	clientsuc "github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/clients"
+	servicesuc "github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/services"
+	statisticsuc "github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/statistics"
+	subscriptionsuc "github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/subscriptions"
+
 	"github.com/gin-gonic/gin"
 )
 
 func Run() error {
-	router := newRouter()
-
 	if err := database.ConnectDB(); err != nil {
 		return fmt.Errorf("connect db: %w", err)
 	}
 	defer database.Close()
+
+	appointmentsRepository := postgresrepo.NewAppointmentsRepository(database.Pool)
+	appointmentsService := appointmentsuc.NewService(appointmentsRepository)
+	appointmentsHandler := handlers.NewAppointmentsHandler(appointmentsService)
+	router := newRouter(appointmentsHandler)
 
 	setupServices()
 
@@ -64,13 +69,14 @@ func Run() error {
 	}
 }
 
-func newRouter() *gin.Engine {
+func newRouter(appointmentsHandler *handlers.AppointmentsHandler) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{
 		SkipPaths: []string{"/healthz", "/version"},
 	}))
 	router.Use(gin.Recovery())
-	router.StaticFile("/", "./test.html")
+	router.Static("/assets", "./web/assets")
+	router.StaticFile("/", "./web/index.html")
 	router.GET("/healthz", healthHandler())
 	router.HEAD("/healthz", healthHandler())
 	router.GET("/version", func(c *gin.Context) {
@@ -80,7 +86,7 @@ func newRouter() *gin.Engine {
 			"app_image": getenv("APP_IMAGE", "unknown"),
 		})
 	})
-	setupRoutes(router)
+	setupRoutes(router, appointmentsHandler)
 	return router
 }
 
@@ -90,14 +96,14 @@ func healthHandler() gin.HandlerFunc {
 	}
 }
 
-func setupRoutes(router *gin.Engine) {
+func setupRoutes(router *gin.Engine, h *controllerhttp.AppointmentsHandler) {
 	visitsGroup := router.Group("/visits")
 	{
-		visitsGroup.POST("/", controllerhttp.CreateVisit)
-		visitsGroup.GET("/", controllerhttp.GetVisits)
-		visitsGroup.PUT("/status/:id", controllerhttp.UpdateVisitStatus)
-		visitsGroup.PUT("/move/:id", controllerhttp.MoveVisit)
-		visitsGroup.DELETE("/:id", controllerhttp.DeleteVisit)
+		visitsGroup.POST("/", h.CreateVisit)
+		visitsGroup.GET("/", h.GetVisits)
+		visitsGroup.PUT("/status/:id", h.UpdateVisitStatus)
+		visitsGroup.PUT("/move/:id", h.MoveVisit)
+		visitsGroup.DELETE("/:id", h.DeleteVisit)
 	}
 
 	clientsGroup := router.Group("/clients")
@@ -150,8 +156,7 @@ func setupServices() {
 		AppointmentPaymentOperator: billingRepository,
 		PaymentRollbackRepo:        billingRepository,
 	})
-	appointmentsRepository := postgresrepo.NewAppointmentsRepository(database.Pool)
-	appointmentsService := appointmentsuc.NewService(appointmentsRepository)
+
 	clientsRepository := postgresrepo.NewClientsRepository(database.Pool)
 	clientsService := clientsuc.NewService(clientsRepository)
 	servicesRepository := postgresrepo.NewServicesRepository(database.Pool)
@@ -161,7 +166,7 @@ func setupServices() {
 	subscriptionsRepository := postgresrepo.NewSubscriptionsRepository(database.Pool)
 	subscriptionsService := subscriptionsuc.NewService(subscriptionsRepository)
 	controllerhttp.SetBillingService(billingService)
-	controllerhttp.SetAppointmentsService(appointmentsService)
+	//controllerhttp.SetAppointmentsService(appointmentsService)
 	controllerhttp.SetClientsService(clientsService)
 	controllerhttp.SetServicesService(servicesService)
 	controllerhttp.SetStatisticsService(statisticsService)

@@ -1,10 +1,10 @@
 package postgres
 
 import (
-	"appointment-service/internal/usecase/appointments"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/appointments"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -60,15 +60,30 @@ func (r *AppointmentsRepository) List(ctx context.Context, filter appointments.L
 		  AND s.deleted_at IS NULL
 	`
 
-	args := make([]any, 0, 1)
+	args := make([]any, 0, 4)
 	argIndex := 1
 
 	if filter.OnlyUnpaid {
 		query += " AND a.payment_status = 'unpaid'"
 	}
-	if filter.Start != nil {
+	if filter.ClientID > 0 {
+		query += fmt.Sprintf(" AND a.client_id = $%d", argIndex)
+		args = append(args, filter.ClientID)
+		argIndex++
+	}
+	if filter.AppointmentStatus != "" {
+		query += fmt.Sprintf(" AND a.appointment_status = $%d", argIndex)
+		args = append(args, filter.AppointmentStatus)
+		argIndex++
+	}
+	if filter.From != nil {
 		query += fmt.Sprintf(" AND a.start_time >= $%d", argIndex)
-		args = append(args, *filter.Start)
+		args = append(args, *filter.From)
+		argIndex++
+	}
+	if filter.To != nil {
+		query += fmt.Sprintf(" AND a.start_time < $%d", argIndex)
+		args = append(args, filter.To.AddDate(0, 0, 1))
 		argIndex++
 	}
 

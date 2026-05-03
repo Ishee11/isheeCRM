@@ -22,8 +22,8 @@ RUN apk add --no-cache ca-certificates wget
 WORKDIR /app
 # Копируем собранный бинарный файл из builder-образа в конечный образ
 COPY --from=builder /app/main .
-# Копируем минимальный UI для проверки состояния сервиса после деплоя
-COPY --from=builder /build/test.html ./test.html
+# Копируем веб-интерфейс
+COPY --from=builder /build/web ./web
 # Открываем порт 8080
 EXPOSE 8080
 # Устанавливаем команду для запуска приложения

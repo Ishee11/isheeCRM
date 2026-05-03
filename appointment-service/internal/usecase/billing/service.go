@@ -163,12 +163,12 @@ func (s *Service) AddSubscriptionVisit(ctx context.Context, req AddSubscriptionV
 		}
 
 		if err := s.paymentStatusUpdater.UpdateAppointmentPaymentStatus(
-        txCtx,
-        req.AppointmentID,
-        "paid",
-  ); err != nil {
-        return err
-  }
+			txCtx,
+			req.AppointmentID,
+			"paid",
+		); err != nil {
+			return err
+		}
 
 		return nil
 	})

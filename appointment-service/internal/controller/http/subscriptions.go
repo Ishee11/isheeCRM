@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"appointment-service/internal/usecase/subscriptions"
 	"errors"
+	"github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/subscriptions"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

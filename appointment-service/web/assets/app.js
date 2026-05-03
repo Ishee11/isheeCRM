@@ -9,7 +9,7 @@ const state = {
 };
 
 const titles = {
-  schedule: ["Рабочий день", "Расписание"],
+  schedule: ["Рабочий день", "Журнал записи"],
   clients: ["Карточки", "Клиенты"],
   sales: ["Абонементы", "Продажи"],
   services: ["Каталог", "Услуги"],
@@ -69,6 +69,17 @@ function formatTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return timeOnly.format(date);
+}
+
+function appointmentHour(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 9;
+  return date.getHours();
+}
+
+function toDateTimeInputValue(date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
 }
 
 function formatMoney(value) {
@@ -168,9 +179,9 @@ async function loadStatistics() {
 }
 
 function scheduleQuery() {
-	const params = new URLSearchParams();
-	params.set("format", "list");
-	const selected = qs("#scheduleDate").value;
+  const params = new URLSearchParams();
+  params.set("format", "list");
+  const selected = qs("#scheduleDate").value;
   const status = qs("#visitStatus").value;
 
   if (state.range === "today" && selected) {
@@ -215,29 +226,60 @@ async function loadVisits() {
 function renderVisits() {
   const timeline = qs("#visitTimeline");
   qs("#visitsCaption").textContent = `${state.visits.length} записей`;
+  renderJournalTotals();
 
-  if (!state.visits.length) {
-    timeline.innerHTML = `<div class="empty-state">На выбранный период записей нет</div>`;
-    return;
-  }
-
-  timeline.innerHTML = state.visits.map((visit) => {
-    const active = state.selectedVisit && String(state.selectedVisit.id) === String(visit.id);
-    return `
-      <button class="appointment-card ${active ? "active" : ""}" data-visit-id="${escapeHtml(visit.id)}" type="button">
-        <span class="time-block">${escapeHtml(formatTime(visit.start_time))}</span>
-        <span class="appointment-main">
-          <strong>${escapeHtml(visit.client_name || `Клиент #${visit.client_id || ""}`)}</strong>
-          <span>${escapeHtml(visit.service_name || `Услуга #${visit.service_id || ""}`)} · ${escapeHtml(formatDate(visit.start_time))}</span>
-        </span>
-        <span class="pill ${statusClass(visit.payment_status)}">${escapeHtml(visit.payment_status || "unpaid")}</span>
-      </button>
-    `;
-  }).join("");
+  const hours = Array.from({ length: 14 }, (_, index) => index + 8);
+  timeline.innerHTML = `
+    <div class="journal-grid">
+      <div class="journal-head journal-time-head">Время</div>
+      <div class="journal-head">Все записи</div>
+      ${hours.map((hour) => renderJournalHour(hour)).join("")}
+    </div>
+  `;
 
   qsa("[data-visit-id]").forEach((item) => {
     item.addEventListener("click", () => selectVisit(item.dataset.visitId));
   });
+  qsa("[data-slot-hour]").forEach((item) => {
+    item.addEventListener("click", () => openAppointmentDialog(Number(item.dataset.slotHour)));
+  });
+}
+
+function renderJournalTotals() {
+  const target = qs("#journalTotals");
+  const unpaid = state.visits.filter((visit) => (visit.payment_status || "unpaid") === "unpaid").length;
+  const paid = state.visits.filter((visit) => (visit.payment_status || "") === "paid").length;
+  target.innerHTML = `
+    <span class="mini-stat"><strong>${state.visits.length}</strong> записей</span>
+    <span class="mini-stat"><strong>${paid}</strong> оплачено</span>
+    <span class="mini-stat"><strong>${unpaid}</strong> без оплаты</span>
+  `;
+}
+
+function renderJournalHour(hour) {
+  const hourVisits = state.visits.filter((visit) => appointmentHour(visit.start_time) === hour);
+  const label = `${String(hour).padStart(2, "0")}:00`;
+
+  return `
+    <div class="journal-time">${label}</div>
+    <div class="journal-cell">
+      ${hourVisits.length ? hourVisits.map(renderJournalVisit).join("") : `<button class="empty-slot" data-slot-hour="${hour}" type="button">Свободно</button>`}
+    </div>
+  `;
+}
+
+function renderJournalVisit(visit) {
+  const active = state.selectedVisit && String(state.selectedVisit.id) === String(visit.id);
+  return `
+    <button class="journal-visit ${active ? "active" : ""}" data-visit-id="${escapeHtml(visit.id)}" type="button">
+      <span class="visit-time">${escapeHtml(formatTime(visit.start_time))}</span>
+      <span class="visit-title">
+        <strong>${escapeHtml(visit.client_name || `Клиент #${visit.client_id || ""}`)}</strong>
+        <small>${escapeHtml(visit.service_name || `Услуга #${visit.service_id || ""}`)}</small>
+      </span>
+      <span class="pill ${statusClass(visit.payment_status)}">${escapeHtml(visit.payment_status || "unpaid")}</span>
+    </button>
+  `;
 }
 
 function selectVisit(id) {
@@ -264,6 +306,12 @@ function renderAppointmentContext() {
     <div class="context-title">
       <strong>${escapeHtml(visit.client_name || `Клиент #${visit.client_id || ""}`)}</strong>
       <span>${escapeHtml(visit.service_name || `Услуга #${visit.service_id || ""}`)}</span>
+    </div>
+    <div class="visit-tabs">
+      <span class="active">Визит</span>
+      <span>Клиент</span>
+      <span>Оплата</span>
+      <span>Абонемент</span>
     </div>
     <div class="kv-grid">
       <div class="kv"><span>Время</span><strong>${escapeHtml(formatDate(visit.start_time))}</strong></div>
@@ -382,6 +430,31 @@ function renderServiceOptions() {
     return `<option value="${escapeHtml(id)}">${escapeHtml(service.name)} · ${escapeHtml(formatMoney(service.price))}</option>`;
   }).join("");
   if (current) select.value = current;
+  renderPopularServices();
+}
+
+function renderPopularServices() {
+  const target = qs("#popularServices");
+  if (!target) return;
+  const popular = state.services.slice(0, 6);
+  if (!popular.length) {
+    target.innerHTML = "";
+    return;
+  }
+  target.innerHTML = `
+    <span>Популярные услуги</span>
+    <div>
+      ${popular.map((service) => {
+        const id = service.service_id || service.id;
+        return `<button type="button" data-service-pick="${escapeHtml(id)}">${escapeHtml(service.name)}</button>`;
+      }).join("")}
+    </div>
+  `;
+  qsa("[data-service-pick]").forEach((button) => {
+    button.addEventListener("click", () => {
+      qs("#appointmentServiceSelect").value = button.dataset.servicePick;
+    });
+  });
 }
 
 function renderServices() {
@@ -514,8 +587,26 @@ async function selectClient(client) {
     <span>${escapeHtml(client.phone || "")}</span>
   `;
   renderClient(client);
+  renderClientSnapshot(client);
   fillSalesClient();
   await loadClientMemberships();
+}
+
+function renderClientSnapshot(client) {
+  const target = qs("#clientSnapshot");
+  if (!target) return;
+  if (!client) {
+    target.innerHTML = `<div class="empty-state">История появится после выбора клиента</div>`;
+    return;
+  }
+  target.innerHTML = `
+    <div class="kv-grid">
+      <div class="kv"><span>Визиты</span><strong>${escapeHtml(client.visit_count || 0)}</strong></div>
+      <div class="kv"><span>Потрачено</span><strong>${escapeHtml(formatMoney(client.spent))}</strong></div>
+      <div class="kv"><span>Последний визит</span><strong>${escapeHtml(formatDate(client.last_visit))}</strong></div>
+      <div class="kv"><span>Скидка</span><strong>${escapeHtml(client.discount || 0)}%</strong></div>
+    </div>
+  `;
 }
 
 function renderClient(client) {
@@ -679,14 +770,20 @@ async function createAppointment(event) {
   }
 }
 
-function openAppointmentDialog() {
+function openAppointmentDialog(hour) {
   loadServices();
   const form = qs("#appointmentForm");
-  const date = new Date();
-  date.setHours(date.getHours() + 1, 0, 0, 0);
-  form.start_time.value = date.toISOString().slice(0, 16);
+  const selectedDate = qs("#scheduleDate").value || new Date().toISOString().slice(0, 10);
+  const date = new Date(`${selectedDate}T00:00:00`);
+  const targetHour = Number.isFinite(hour) ? hour : new Date().getHours() + 1;
+  date.setHours(targetHour, 0, 0, 0);
+  form.start_time.value = toDateTimeInputValue(date);
   if (state.selectedClient) {
     form.client_id.value = state.selectedClient.id || "";
+    renderClientSnapshot(state.selectedClient);
+  } else {
+    qs("#selectedClientBox").textContent = "Клиент не выбран";
+    renderClientSnapshot(null);
   }
   qs("#appointmentDialog").showModal();
 }

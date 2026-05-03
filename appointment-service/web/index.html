@@ -17,7 +17,7 @@
       <nav class="nav-list" aria-label="Разделы">
         <button class="nav-item active" data-view="schedule" type="button">
           <span class="nav-icon">01</span>
-          <span>Расписание</span>
+          <span>Журнал записи</span>
         </button>
         <button class="nav-item" data-view="clients" type="button">
           <span class="nav-icon">02</span>
@@ -50,7 +50,7 @@
       <header class="topbar">
         <div>
           <p class="eyebrow" id="currentEyebrow">Рабочий день</p>
-          <h1 id="currentTitle">Расписание</h1>
+          <h1 id="currentTitle">Журнал записи</h1>
         </div>
         <div class="topbar-actions">
           <button class="ghost-button" id="refreshButton" type="button">Обновить</button>
@@ -85,9 +85,10 @@
           <section class="panel schedule-board">
             <div class="panel-head">
               <div>
-                <h2>Записи</h2>
+                <h2>Журнал записи</h2>
                 <p id="visitsCaption">Загрузка расписания</p>
               </div>
+              <div class="journal-totals" id="journalTotals"></div>
             </div>
             <div class="timeline" id="visitTimeline"></div>
           </section>
@@ -264,7 +265,7 @@
     </main>
   </div>
 
-  <dialog class="drawer" id="appointmentDialog">
+  <dialog class="drawer record-drawer" id="appointmentDialog">
     <form method="dialog" class="drawer-frame">
       <header class="drawer-head">
         <div>
@@ -275,39 +276,45 @@
       </header>
     </form>
     <div class="drawer-body">
-      <section class="drawer-section">
-        <h3>Клиент</h3>
-        <form class="inline-form" id="appointmentClientSearchForm">
-          <input id="appointmentClientPhone" placeholder="+79990000000">
-          <button class="secondary-button" type="submit">Найти</button>
-        </form>
-        <form class="form-stack subtle-box" id="appointmentClientCreateForm">
-          <div class="two-col">
-            <input name="name" placeholder="Имя клиента">
-            <input name="phone" placeholder="+79990000000">
-          </div>
-          <button class="text-button" type="submit">Создать нового клиента</button>
-        </form>
-        <div id="selectedClientBox" class="selected-box">Клиент не выбран</div>
-      </section>
+      <div class="record-window">
+        <section class="drawer-section record-main">
+          <h3>Детали записи</h3>
+          <form class="form-stack" id="appointmentForm">
+            <input name="client_id" type="hidden">
+            <label>
+              <span>Услуга</span>
+              <select name="service_id" id="appointmentServiceSelect" required>
+                <option value="">Выберите услугу</option>
+              </select>
+            </label>
+            <div class="popular-services" id="popularServices"></div>
+            <label>
+              <span>Дата и время</span>
+              <input name="start_time" type="datetime-local" required>
+            </label>
+            <button class="primary-button" type="submit">Записать</button>
+          </form>
+        </section>
 
-      <section class="drawer-section">
-        <h3>Запись</h3>
-        <form class="form-stack" id="appointmentForm">
-          <input name="client_id" type="hidden">
-          <label>
-            <span>Услуга</span>
-            <select name="service_id" id="appointmentServiceSelect" required>
-              <option value="">Выберите услугу</option>
-            </select>
-          </label>
-          <label>
-            <span>Дата и время</span>
-            <input name="start_time" type="datetime-local" required>
-          </label>
-          <button class="primary-button" type="submit">Записать</button>
-        </form>
-      </section>
+        <aside class="drawer-section record-side">
+          <h3>Клиент</h3>
+          <form class="inline-form" id="appointmentClientSearchForm">
+            <input id="appointmentClientPhone" placeholder="+79990000000">
+            <button class="secondary-button" type="submit">Найти</button>
+          </form>
+          <form class="form-stack subtle-box" id="appointmentClientCreateForm">
+            <div class="two-col">
+              <input name="name" placeholder="Имя клиента">
+              <input name="phone" placeholder="+79990000000">
+            </div>
+            <button class="text-button" type="submit">Создать нового клиента</button>
+          </form>
+          <div id="selectedClientBox" class="selected-box">Клиент не выбран</div>
+          <div class="client-snapshot" id="clientSnapshot">
+            <div class="empty-state">История появится после выбора клиента</div>
+          </div>
+        </aside>
+      </div>
     </div>
   </dialog>
 

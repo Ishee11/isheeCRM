@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	clientsuc "github.com/Ishee11/isheeCRM/appointment-service/internal/usecase/clients"
 	"github.com/gin-gonic/gin"
@@ -85,6 +86,54 @@ func FindClientByPhoneHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"client_id": clientID,
 		"phone":     normalizedPhone,
+	})
+}
+
+func SearchClientsHandler(c *gin.Context) {
+	query := strings.TrimSpace(c.Query("q"))
+	if query == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Поисковая строка обязательна",
+			"details": "Параметр q не передан или пустой",
+		})
+		return
+	}
+
+	limit := 8
+	if limitQuery := c.Query("limit"); limitQuery != "" {
+		parsedLimit, err := strconv.Atoi(limitQuery)
+		if err != nil || parsedLimit <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный формат limit"})
+			return
+		}
+		limit = parsedLimit
+	}
+
+	if clientsService == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Clients service is not configured"})
+		return
+	}
+
+	results, err := clientsService.Search(c.Request.Context(), query, limit)
+	if err != nil {
+		clientsErrorResponse(c, err, "Клиенты не найдены")
+		return
+	}
+
+	items := make([]gin.H, 0, len(results))
+	for _, item := range results {
+		items = append(items, gin.H{
+			"id":          item.ID,
+			"name":        item.Name,
+			"phone":       item.Phone,
+			"last_visit":  item.LastVisit,
+			"visit_count": item.VisitCount,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"items": items,
+		"total": len(items),
 	})
 }
 

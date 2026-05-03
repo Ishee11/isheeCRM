@@ -17,6 +17,7 @@ var (
 type Repository interface {
 	Create(ctx context.Context, phone, name string) (int, error)
 	FindByPhone(ctx context.Context, phone string) (int, error)
+	Search(ctx context.Context, query string, limit int) ([]SearchResult, error)
 	GetInfo(ctx context.Context, clientID int) (Info, error)
 }
 
@@ -42,6 +43,14 @@ type Info struct {
 	FirstVisit *time.Time
 	VisitCount *int
 	Comment    *string
+}
+
+type SearchResult struct {
+	ID         int
+	Name       *string
+	Phone      *string
+	LastVisit  *time.Time
+	VisitCount *int
 }
 
 func (s *Service) Create(ctx context.Context, phone, name string) (int, string, error) {
@@ -82,6 +91,18 @@ func (s *Service) GetInfo(ctx context.Context, clientID int) (Info, error) {
 	}
 
 	return s.repo.GetInfo(ctx, clientID)
+}
+
+func (s *Service) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	query = strings.TrimSpace(query)
+	if len([]rune(query)) < 2 {
+		return nil, fmt.Errorf("%w: query must contain at least 2 characters", ErrInvalidInput)
+	}
+	if limit <= 0 || limit > 20 {
+		limit = 8
+	}
+
+	return s.repo.Search(ctx, query, limit)
 }
 
 func normalizePhone(phone string) string {

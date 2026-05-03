@@ -2,6 +2,7 @@ const state = {
   view: "schedule",
   range: "today",
   visits: [],
+  clientSearch: [],
   services: [],
   membershipTypes: [],
   selectedVisit: null,
@@ -46,6 +47,14 @@ function qs(selector) {
 
 function qsa(selector) {
   return Array.from(document.querySelectorAll(selector));
+}
+
+function debounce(fn, delay) {
+  let timeoutID;
+  return (...args) => {
+    clearTimeout(timeoutID);
+    timeoutID = setTimeout(() => fn(...args), delay);
+  };
 }
 
 function text(value, fallback = "-") {
@@ -708,6 +717,11 @@ async function findClientByPhone(phone) {
   };
 }
 
+async function searchClients(query) {
+  const data = await api(`/clients/search?q=${encodeURIComponent(query)}&limit=8`);
+  return Array.isArray(data) ? data : data.items || [];
+}
+
 async function searchClient(event) {
   event.preventDefault();
   const phone = qs("#clientPhone").value.trim();
@@ -723,18 +737,55 @@ async function searchClient(event) {
   }
 }
 
-async function searchAppointmentClient(event) {
-  event.preventDefault();
-  const phone = qs("#appointmentClientPhone").value.trim();
-  if (!phone) {
-    toast("Введите телефон", "error");
+async function updateAppointmentClientSearch() {
+  const query = qs("#appointmentClientQuery").value.trim();
+  if (query.length < 2) {
+    state.clientSearch = [];
+    renderAppointmentClientResults("Введите минимум 2 символа");
     return;
   }
 
   try {
-    await selectClient(await findClientByPhone(phone));
+    state.clientSearch = await searchClients(query);
+    renderAppointmentClientResults();
   } catch (error) {
-    toast(`Клиент не найден: ${error.message}`, "error");
+    state.clientSearch = [];
+    renderAppointmentClientResults("Клиенты не найдены");
+  }
+}
+
+function renderAppointmentClientResults(emptyText = "Ничего не найдено") {
+  const target = qs("#appointmentClientResults");
+  if (!target) return;
+  if (!state.clientSearch.length) {
+    target.innerHTML = `<div class="client-result-empty">${escapeHtml(emptyText)}</div>`;
+    return;
+  }
+
+  target.innerHTML = state.clientSearch.map((client) => `
+    <button class="client-result" data-client-id="${escapeHtml(client.id)}" type="button">
+      <strong>${escapeHtml(client.name || `Клиент #${client.id}`)}</strong>
+      <span>${escapeHtml(client.phone || "")}</span>
+      <small>${escapeHtml(client.visit_count || 0)} визитов${client.last_visit ? ` · ${escapeHtml(formatDate(client.last_visit))}` : ""}</small>
+    </button>
+  `).join("");
+
+  qsa("[data-client-id]").forEach((button) => {
+    button.addEventListener("click", () => selectClientFromSearch(button.dataset.clientId));
+  });
+}
+
+async function selectClientFromSearch(clientID) {
+  const picked = state.clientSearch.find((client) => String(client.id) === String(clientID));
+  if (!picked) return;
+  try {
+    const info = await api(`/clients/info?client_id=${encodeURIComponent(picked.id)}`);
+    await selectClient({ id: picked.id, ...picked, ...info });
+    qs("#appointmentClientQuery").value = `${info.name || picked.name || `Клиент #${picked.id}`} ${info.phone || picked.phone || ""}`.trim();
+    state.clientSearch = [];
+    qs("#appointmentClientResults").innerHTML = "";
+  } catch (error) {
+    toast(`Клиент недоступен: ${error.message}`, "error");
   }
 }
 
@@ -944,6 +995,11 @@ function openAppointmentDialog(hour, dateValue) {
     qs("#selectedClientBox").textContent = "Клиент не выбран";
     renderClientSnapshot(null);
   }
+  qs("#appointmentClientQuery").value = state.selectedClient
+    ? `${state.selectedClient.name || `Клиент #${state.selectedClient.id}`} ${state.selectedClient.phone || ""}`.trim()
+    : "";
+  state.clientSearch = [];
+  qs("#appointmentClientResults").innerHTML = "";
   qs("#appointmentDialog").showModal();
 }
 
@@ -985,8 +1041,8 @@ function bindEvents() {
   qs("#visitStatus").addEventListener("change", loadVisits);
   qs("#clientSearchForm").addEventListener("submit", searchClient);
   qs("#clientForm").addEventListener("submit", createClientFromForm);
-  qs("#appointmentClientSearchForm").addEventListener("submit", searchAppointmentClient);
   qs("#appointmentClientCreateForm").addEventListener("submit", createAppointmentClient);
+  qs("#appointmentClientQuery").addEventListener("input", debounce(updateAppointmentClientSearch, 250));
   qs("#appointmentForm").addEventListener("submit", createAppointment);
   qs("#serviceForm").addEventListener("submit", createService);
   qs("#sellMembershipForm").addEventListener("submit", sellMembership);

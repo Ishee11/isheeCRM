@@ -14,6 +14,9 @@ type fakeClientsRepo struct {
 	searchedPhone   string
 	infoCalls       int
 	queriedClientID int
+	searchCalls     int
+	searchQuery     string
+	searchLimit     int
 }
 
 func (f *fakeClientsRepo) Create(ctx context.Context, phone, name string) (int, error) {
@@ -33,6 +36,13 @@ func (f *fakeClientsRepo) GetInfo(ctx context.Context, clientID int) (Info, erro
 	f.infoCalls++
 	f.queriedClientID = clientID
 	return Info{Name: ptrString("John")}, nil
+}
+
+func (f *fakeClientsRepo) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	f.searchCalls++
+	f.searchQuery = query
+	f.searchLimit = limit
+	return []SearchResult{{ID: 77, Name: ptrString("Anna")}}, nil
 }
 
 func ptrString(s string) *string {
@@ -95,5 +105,30 @@ func TestService_GetInfoValidation(t *testing.T) {
 	}
 	if repo.infoCalls != 0 {
 		t.Fatalf("repo should not be called for invalid id")
+	}
+}
+
+func TestService_SearchValidation(t *testing.T) {
+	repo := &fakeClientsRepo{}
+	svc := NewService(repo)
+	if _, err := svc.Search(context.Background(), "a", 8); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("Search() error %v, want ErrInvalidInput", err)
+	}
+	if repo.searchCalls != 0 {
+		t.Fatalf("repo should not be called for short query")
+	}
+}
+
+func TestService_SearchUsesDefaultLimit(t *testing.T) {
+	repo := &fakeClientsRepo{}
+	svc := NewService(repo)
+	if _, err := svc.Search(context.Background(), " Anna ", 0); err != nil {
+		t.Fatalf("Search() unexpected error %v", err)
+	}
+	if repo.searchQuery != "Anna" {
+		t.Fatalf("query = %q", repo.searchQuery)
+	}
+	if repo.searchLimit != 8 {
+		t.Fatalf("limit = %d", repo.searchLimit)
 	}
 }

@@ -101,6 +101,60 @@ func (r *ClientsRepository) GetInfo(ctx context.Context, clientID int) (clients.
 	return info, nil
 }
 
+func (r *ClientsRepository) Search(ctx context.Context, query string, limit int) ([]clients.SearchResult, error) {
+	search := "%" + query + "%"
+	querySQL := `
+		SELECT
+			c.clients_id,
+			c.name,
+			c.phone,
+			cs.last_visit,
+			cs.visit_count
+		FROM clients c
+		LEFT JOIN client_stats cs ON cs.clients_id = c.clients_id
+		WHERE c.deleted_at IS NULL
+		  AND (
+			c.name ILIKE $1
+			OR c.phone ILIKE $1
+			OR (
+				length(regexp_replace($2, '\D', '', 'g')) >= 2
+				AND c.phone ILIKE '%' || regexp_replace($2, '\D', '', 'g') || '%'
+			)
+		  )
+		ORDER BY
+			CASE WHEN c.phone = $2 THEN 0 ELSE 1 END,
+			cs.last_visit DESC NULLS LAST,
+			c.name
+		LIMIT $3
+	`
+
+	rows, err := r.pool.Query(ctx, querySQL, search, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("search clients: %w", err)
+	}
+	defer rows.Close()
+
+	result := make([]clients.SearchResult, 0, limit)
+	for rows.Next() {
+		var item clients.SearchResult
+		if err := rows.Scan(
+			&item.ID,
+			&item.Name,
+			&item.Phone,
+			&item.LastVisit,
+			&item.VisitCount,
+		); err != nil {
+			return nil, fmt.Errorf("scan client search result: %w", err)
+		}
+		result = append(result, item)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("iterate client search results: %w", rows.Err())
+	}
+
+	return result, nil
+}
+
 var _ clients.Repository = (*ClientsRepository)(nil)
 
 var _ = time.Time{}

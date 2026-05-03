@@ -109,6 +109,7 @@ func setupRoutes(router *gin.Engine, h *controllerhttp.AppointmentsHandler) {
 	clientsGroup := router.Group("/clients")
 	{
 		clientsGroup.POST("/", controllerhttp.CreateClient)
+		clientsGroup.GET("/search", controllerhttp.SearchClientsHandler)
 		clientsGroup.GET("/find", controllerhttp.FindClientByPhoneHandler)
 		clientsGroup.GET("/info", controllerhttp.GetClientInfoHandler)
 	}

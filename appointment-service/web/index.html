@@ -325,10 +325,13 @@
 
         <aside class="drawer-section record-side">
           <h3>Клиент</h3>
-          <form class="inline-form" id="appointmentClientSearchForm">
-            <input id="appointmentClientPhone" placeholder="+79990000000">
-            <button class="secondary-button" type="submit">Найти</button>
-          </form>
+          <div class="client-picker">
+            <label>
+              <span>Имя или телефон</span>
+              <input id="appointmentClientQuery" autocomplete="off" placeholder="Начните вводить имя или телефон">
+            </label>
+            <div class="client-results" id="appointmentClientResults"></div>
+          </div>
           <form class="form-stack subtle-box" id="appointmentClientCreateForm">
             <div class="two-col">
               <input name="name" placeholder="Имя клиента">

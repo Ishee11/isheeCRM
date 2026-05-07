@@ -14,6 +14,7 @@ var (
 
 type Repository interface {
 	GetByPeriod(ctx context.Context, startDate, endDate time.Time) (Summary, error)
+	GetClientPayments(ctx context.Context) ([]ClientPaymentStats, error)
 }
 
 type Service struct {
@@ -35,6 +36,14 @@ type Summary struct {
 	TotalSubscriptions float64
 }
 
+type ClientPaymentStats struct {
+	ClientID  int
+	Name      string
+	Count     int64
+	AvgAmount float64
+	Paid      float64
+}
+
 func (s *Service) GetByPeriod(ctx context.Context, startDate, endDate time.Time) (Summary, error) {
 	if startDate.IsZero() || endDate.IsZero() {
 		return Summary{}, fmt.Errorf("%w: start_date and end_date are required", ErrInvalidInput)
@@ -50,4 +59,8 @@ func (s *Service) GetCurrentMonth(ctx context.Context) (Summary, error) {
 	now := s.now()
 	startDate := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	return s.repo.GetByPeriod(ctx, startDate, now)
+}
+
+func (s *Service) GetClientPayments(ctx context.Context) ([]ClientPaymentStats, error) {
+	return s.repo.GetClientPayments(ctx)
 }

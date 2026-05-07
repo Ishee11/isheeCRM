@@ -20,6 +20,10 @@ func (f *fakeStatisticsRepo) GetByPeriod(ctx context.Context, startDate, endDate
 	return Summary{TotalVisits: 5}, nil
 }
 
+func (f *fakeStatisticsRepo) GetClientPayments(ctx context.Context) ([]ClientPaymentStats, error) {
+	return []ClientPaymentStats{{ClientID: 1, Name: "Анна", Count: 2, AvgAmount: 1500, Paid: 3000}}, nil
+}
+
 func TestService_GetByPeriodValidation(t *testing.T) {
 	repo := &fakeStatisticsRepo{}
 	svc := NewService(repo)

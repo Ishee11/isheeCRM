@@ -140,6 +140,7 @@ func setupRoutes(router *gin.Engine, h *controllerhttp.AppointmentsHandler) {
 	{
 		statisticsGroup.POST("/", controllerhttp.GetStatisticsHandler)
 		statisticsGroup.GET("/current-month", controllerhttp.GetCurrentMonthStatisticsHandler)
+		statisticsGroup.GET("/clients", controllerhttp.GetClientPaymentStatisticsHandler)
 	}
 }
 

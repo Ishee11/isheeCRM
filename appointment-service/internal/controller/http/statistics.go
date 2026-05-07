@@ -89,3 +89,30 @@ func GetCurrentMonthStatisticsHandler(c *gin.Context) {
 		TotalSubscriptions: stats.TotalSubscriptions,
 	})
 }
+
+// GetClientPaymentStatisticsHandler отдаёт платежные агрегаты по клиентам.
+func GetClientPaymentStatisticsHandler(c *gin.Context) {
+	if statisticsService == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Statistics service is not configured"})
+		return
+	}
+
+	stats, err := statisticsService.GetClientPayments(c.Request.Context())
+	if err != nil {
+		statisticsErrorResponse(c, err)
+		return
+	}
+
+	response := make([]entity.ClientPaymentStatistics, 0, len(stats))
+	for _, item := range stats {
+		response = append(response, entity.ClientPaymentStatistics{
+			ClientID:  item.ClientID,
+			Name:      item.Name,
+			Count:     item.Count,
+			AvgAmount: item.AvgAmount,
+			Paid:      item.Paid,
+		})
+	}
+
+	c.JSON(http.StatusOK, response)
+}

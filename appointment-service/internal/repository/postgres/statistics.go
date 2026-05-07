@@ -62,4 +62,46 @@ func (r *StatisticsRepository) GetByPeriod(ctx context.Context, startDate, endDa
 	return summary, nil
 }
 
+func (r *StatisticsRepository) GetClientPayments(ctx context.Context) ([]statistics.ClientPaymentStats, error) {
+	query := `
+		SELECT
+			cl.clients_id,
+			COALESCE(cl.name, '') AS name,
+			COUNT(*) AS count,
+			AVG(fo.amount) AS avg_amount,
+			SUM(fo.amount) AS paid
+		FROM clients AS cl
+		JOIN appointments AS ap ON ap.client_id = cl.clients_id
+		JOIN financial_operations AS fo ON fo.appointment_id = ap.id
+		GROUP BY cl.clients_id, cl.name
+		ORDER BY paid DESC, avg_amount DESC;
+	`
+
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("get client payments: %w", err)
+	}
+	defer rows.Close()
+
+	result := make([]statistics.ClientPaymentStats, 0)
+	for rows.Next() {
+		var item statistics.ClientPaymentStats
+		if err := rows.Scan(
+			&item.ClientID,
+			&item.Name,
+			&item.Count,
+			&item.AvgAmount,
+			&item.Paid,
+		); err != nil {
+			return nil, fmt.Errorf("scan client payment stats: %w", err)
+		}
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate client payment stats: %w", err)
+	}
+
+	return result, nil
+}
+
 var _ statistics.Repository = (*StatisticsRepository)(nil)

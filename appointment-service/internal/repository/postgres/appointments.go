@@ -167,19 +167,71 @@ func (r *AppointmentsRepository) Move(ctx context.Context, appointmentID int, st
 }
 
 func (r *AppointmentsRepository) SoftDelete(ctx context.Context, appointmentID int) error {
-	query := `
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin soft delete appointment transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	softDeleteQuery := `
 		UPDATE appointments
 		SET deleted_at = NOW()
 		WHERE id = $1
 		  AND deleted_at IS NULL
+		RETURNING id
 	`
 
-	tag, err := r.pool.Exec(ctx, query, appointmentID)
-	if err != nil {
+	var deletedAppointmentID int
+	if err := tx.QueryRow(ctx, softDeleteQuery, appointmentID).Scan(&deletedAppointmentID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("%w: appointment not found", appointments.ErrNotFound)
+		}
 		return fmt.Errorf("soft delete appointment: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("%w: appointment not found", appointments.ErrNotFound)
+
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM financial_operations
+		WHERE appointment_id = $1
+	`, deletedAppointmentID); err != nil {
+		return fmt.Errorf("delete appointment financial operations: %w", err)
+	}
+
+	rows, err := tx.Query(ctx, `
+		DELETE FROM subscription_visits
+		WHERE appointment_id = $1
+		RETURNING subscription_id
+	`, deletedAppointmentID)
+	if err != nil {
+		return fmt.Errorf("delete appointment subscription visits: %w", err)
+	}
+
+	restoresBySubscription := make(map[int]int)
+	for rows.Next() {
+		var subscriptionID int
+		if err := rows.Scan(&subscriptionID); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan deleted subscription visit: %w", err)
+		}
+		restoresBySubscription[subscriptionID]++
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("iterate deleted subscription visits: %w", err)
+	}
+	rows.Close()
+
+	for subscriptionID, restoreCount := range restoresBySubscription {
+		if _, err := tx.Exec(ctx, `
+			UPDATE subscriptions
+			SET current_balance = current_balance + $1
+			WHERE subscriptions_id = $2
+		`, restoreCount, subscriptionID); err != nil {
+			return fmt.Errorf("restore subscription balance: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit soft delete appointment transaction: %w", err)
 	}
 
 	return nil

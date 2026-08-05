@@ -165,6 +165,13 @@ Run local Docker Compose:
 docker compose --env-file .env up -d
 ```
 
+## Client History API
+
+`GET /clients/:id/history` returns a read-only snapshot of the client's visits,
+financial operations and all purchased subscriptions. Subscription entries include
+the type, purchase date, purchased/used/remaining session counts and visit details.
+Empty collections are returned as `[]`; a missing client returns `404`.
+
 ## Notes
 
 - Keep production secrets only in `.env` on the server.

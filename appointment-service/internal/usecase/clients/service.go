@@ -19,6 +19,7 @@ type Repository interface {
 	FindByPhone(ctx context.Context, phone string) (int, error)
 	Search(ctx context.Context, query string, limit int) ([]SearchResult, error)
 	GetInfo(ctx context.Context, clientID int) (Info, error)
+	GetHistory(ctx context.Context, clientID int) (History, error)
 }
 
 type Service struct {
@@ -91,6 +92,14 @@ func (s *Service) GetInfo(ctx context.Context, clientID int) (Info, error) {
 	}
 
 	return s.repo.GetInfo(ctx, clientID)
+}
+
+func (s *Service) GetHistory(ctx context.Context, clientID int) (History, error) {
+	if clientID <= 0 {
+		return History{}, fmt.Errorf("%w: client_id must be positive", ErrInvalidInput)
+	}
+
+	return s.repo.GetHistory(ctx, clientID)
 }
 
 func (s *Service) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {

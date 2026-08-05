@@ -112,6 +112,7 @@ func setupRoutes(router *gin.Engine, h *controllerhttp.AppointmentsHandler) {
 		clientsGroup.GET("/search", controllerhttp.SearchClientsHandler)
 		clientsGroup.GET("/find", controllerhttp.FindClientByPhoneHandler)
 		clientsGroup.GET("/info", controllerhttp.GetClientInfoHandler)
+		clientsGroup.GET("/:id/history", controllerhttp.GetClientHistoryHandler)
 	}
 
 	subscriptionsGroup := router.Group("/subscriptions")

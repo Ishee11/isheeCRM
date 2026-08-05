@@ -181,3 +181,22 @@ func GetClientInfoHandler(c *gin.Context) {
 		"comment":     clientInfo.Comment,
 	})
 }
+
+// GetClientHistoryHandler returns visits, payments and subscriptions for one client.
+func GetClientHistoryHandler(c *gin.Context) {
+	clientID, err := strconv.Atoi(c.Param("id"))
+	if err != nil || clientID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный формат id клиента"})
+		return
+	}
+	if clientsService == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Clients service is not configured"})
+		return
+	}
+	history, err := clientsService.GetHistory(c.Request.Context(), clientID)
+	if err != nil {
+		clientsErrorResponse(c, err, "Клиент не найден")
+		return
+	}
+	c.JSON(http.StatusOK, history)
+}

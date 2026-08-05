@@ -17,6 +17,7 @@ type fakeClientsRepo struct {
 	searchCalls     int
 	searchQuery     string
 	searchLimit     int
+	historyCalls    int
 }
 
 func (f *fakeClientsRepo) Create(ctx context.Context, phone, name string) (int, error) {
@@ -36,6 +37,12 @@ func (f *fakeClientsRepo) GetInfo(ctx context.Context, clientID int) (Info, erro
 	f.infoCalls++
 	f.queriedClientID = clientID
 	return Info{Name: ptrString("John")}, nil
+}
+
+func (f *fakeClientsRepo) GetHistory(ctx context.Context, clientID int) (History, error) {
+	f.historyCalls++
+	f.queriedClientID = clientID
+	return History{ClientID: clientID, Visits: []Visit{}, Payments: []Payment{}, Subscriptions: []Subscription{}}, nil
 }
 
 func (f *fakeClientsRepo) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
@@ -105,6 +112,29 @@ func TestService_GetInfoValidation(t *testing.T) {
 	}
 	if repo.infoCalls != 0 {
 		t.Fatalf("repo should not be called for invalid id")
+	}
+}
+
+func TestService_GetHistoryValidation(t *testing.T) {
+	repo := &fakeClientsRepo{}
+	svc := NewService(repo)
+	if _, err := svc.GetHistory(context.Background(), 0); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("GetHistory() error %v, want ErrInvalidInput", err)
+	}
+	if repo.historyCalls != 0 {
+		t.Fatalf("repo should not be called for invalid id")
+	}
+}
+
+func TestService_GetHistory(t *testing.T) {
+	repo := &fakeClientsRepo{}
+	svc := NewService(repo)
+	history, err := svc.GetHistory(context.Background(), 42)
+	if err != nil {
+		t.Fatalf("GetHistory() unexpected error %v", err)
+	}
+	if history.ClientID != 42 || repo.queriedClientID != 42 || repo.historyCalls != 1 {
+		t.Fatalf("GetHistory() did not delegate client id: history=%+v repo=%+v", history, repo)
 	}
 }
 
